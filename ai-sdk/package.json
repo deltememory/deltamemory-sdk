@@ -1,0 +1,49 @@
+{
+  "name": "@deltamemory/ai-sdk",
+  "type": "module",
+  "version": "0.3.0",
+  "description": "DeltaMemory integration for Vercel AI SDK",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest",
+    "check-types": "tsc --noEmit"
+  },
+  "keywords": [
+    "deltamemory",
+    "ai",
+    "memory",
+    "vercel-ai-sdk",
+    "llm"
+  ],
+  "author": "DeltaMemory",
+  "license": "PROPRIETARY",
+  "repository": {
+    "url": "https://github.com/deltamemory/deltamemory",
+    "directory": "sdks/ai-sdk"
+  },
+  "dependencies": {
+    "ai": "^5.0.0",
+    "deltamemory": "^0.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.0.0"
+  }
+}
