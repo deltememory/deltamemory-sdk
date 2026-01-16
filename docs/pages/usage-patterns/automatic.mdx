@@ -1,0 +1,277 @@
+# Automatic Mode
+
+In automatic mode, DeltaMemory handles all memory operations transparently. The framework automatically recalls relevant context before each LLM call and ingests conversations afterward—no explicit memory management required.
+
+## When to Use
+
+- **Prototyping** — Get memory working quickly without complexity
+- **Simple chatbots** — Consistent memory behavior for straightforward conversations
+- **Demos** — Show memory capabilities with minimal code
+- **Learning** — Understand memory behavior before optimizing
+
+## How It Works
+
+```
+User Message → Auto Recall → LLM with Context → Response → Auto Ingest
+```
+
+1. User sends a message
+2. Framework automatically recalls relevant memories
+3. Memories are injected into the system prompt
+4. LLM generates response with full context
+5. Conversation is automatically ingested for future recall
+
+## Implementation
+
+### With Vercel AI SDK
+
+```typescript
+import { generateText } from 'ai';
+import { createDeltaMemory } from '@deltamemory/ai-sdk';
+
+const deltaMemory = createDeltaMemory({
+  baseUrl: 'http://localhost:6969',
+  apiKey: process.env.DELTAMEMORY_API_KEY
+});
+
+// Memory is handled automatically
+const { text } = await generateText({
+  model: deltaMemory('gpt-4', {
+    userId: 'user-123',
+    // Optional: customize memory behavior
+    autoRecall: true,  // default
+    autoIngest: true,  // default
+  }),
+  prompt: 'What are my preferences?'
+});
+
+console.log(text);
+// "Based on our previous conversations, you prefer TypeScript and dark mode..."
+```
+
+### With LangChain
+
+```python
+from langchain_openai import ChatOpenAI
+from deltamemory.langchain import DeltaMemoryWrapper
+import os
+
+# Wrap your LLM with DeltaMemory
+llm = ChatOpenAI(model="gpt-4")
+memory_llm = DeltaMemoryWrapper(
+    llm=llm,
+    deltamemory_url=os.environ.get('DELTAMEMORY_URL'),
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    user_id="user-123",
+    auto_recall=True,
+    auto_ingest=True
+)
+
+# Use normally - memory is automatic
+response = memory_llm.invoke("What are my preferences?")
+print(response.content)
+# "Based on our previous conversations, you prefer TypeScript and dark mode..."
+```
+
+### With OpenAI SDK
+
+```typescript
+import OpenAI from 'openai';
+import { DeltaMemory } from 'deltamemory';
+import { withAutoMemory } from '@deltamemory/openai';
+
+const openai = new OpenAI();
+const deltaMemory = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+// Wrap OpenAI client with automatic memory
+const memoryOpenAI = withAutoMemory(openai, deltaMemory, {
+  userId: 'user-123'
+});
+
+// Use normally - memory is automatic
+const completion = await memoryOpenAI.chat.completions.create({
+  model: 'gpt-4',
+  messages: [
+    { role: 'user', content: 'What are my preferences?' }
+  ]
+});
+
+console.log(completion.choices[0].message.content);
+```
+
+## Configuration Options
+
+### Memory Injection Strategy
+
+Control how memories are injected into the prompt:
+
+```typescript
+const { text } = await generateText({
+  model: deltaMemory('gpt-4', {
+    userId: 'user-123',
+    memoryStrategy: 'system-prompt',  // default: inject as system message
+    // or 'context-window': append to conversation history
+    // or 'both': use both strategies
+  }),
+  prompt: message
+});
+```
+
+### Recall Limits
+
+Control how many memories to recall:
+
+```typescript
+const { text } = await generateText({
+  model: deltaMemory('gpt-4', {
+    userId: 'user-123',
+    recallLimit: 5,  // default: 10
+    recallWeights: {
+      similarity: 0.6,
+      recency: 0.3,
+      salience: 0.1
+    }
+  }),
+  prompt: message
+});
+```
+
+### Selective Auto-Ingest
+
+Control what gets ingested automatically:
+
+```typescript
+const { text } = await generateText({
+  model: deltaMemory('gpt-4', {
+    userId: 'user-123',
+    ingestFilter: (message, response) => {
+      // Only ingest if response is substantial
+      return response.length > 50;
+    }
+  }),
+  prompt: message
+});
+```
+
+## Complete Example
+
+```typescript
+import { generateText, streamText } from 'ai';
+import { createDeltaMemory } from '@deltamemory/ai-sdk';
+
+const deltaMemory = createDeltaMemory({
+  baseUrl: process.env.DELTAMEMORY_URL,
+  apiKey: process.env.DELTAMEMORY_API_KEY
+});
+
+// Chat function with automatic memory
+async function chat(userId: string, message: string) {
+  const { text } = await generateText({
+    model: deltaMemory('gpt-4', {
+      userId,
+      recallLimit: 10,
+      recallWeights: {
+        similarity: 0.5,
+        recency: 0.3,
+        salience: 0.2
+      }
+    }),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant with memory of past conversations.'
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ]
+  });
+
+  return text;
+}
+
+// Usage
+const response1 = await chat('user-123', 'I prefer TypeScript over JavaScript');
+// "Got it! I'll remember that you prefer TypeScript."
+
+const response2 = await chat('user-123', 'What programming language should I use?');
+// "Based on your preference, I'd recommend TypeScript..."
+```
+
+## Streaming Support
+
+Automatic mode works with streaming responses:
+
+```typescript
+const { textStream } = await streamText({
+  model: deltaMemory('gpt-4', { userId: 'user-123' }),
+  prompt: 'Tell me about my preferences'
+});
+
+for await (const chunk of textStream) {
+  process.stdout.write(chunk);
+}
+// Memory is still ingested after streaming completes
+```
+
+## Performance Considerations
+
+### Latency
+
+Automatic mode adds latency to every request:
+- Recall operation: ~50-200ms
+- Ingest operation: ~100-300ms (async, doesn't block response)
+
+For latency-sensitive applications, consider [Agent-Controlled Tools](/usage-patterns/agent-tools).
+
+### Cost
+
+Every message triggers a recall, which:
+- Queries the vector index
+- Retrieves profiles and events
+- Formats context for LLM
+
+For cost optimization, use selective recall or agent-controlled tools.
+
+### Token Usage
+
+Automatic recall injects memory context into every prompt, increasing token usage. Monitor your token consumption and adjust `recallLimit` accordingly.
+
+## Debugging
+
+Enable debug logging to see memory operations:
+
+```typescript
+const deltaMemory = createDeltaMemory({
+  baseUrl: 'http://localhost:6969',
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  debug: true  // Log all memory operations
+});
+
+// Logs:
+// [DeltaMemory] Recalling memories for user-123...
+// [DeltaMemory] Found 5 relevant memories
+// [DeltaMemory] Injecting context (234 tokens)
+// [DeltaMemory] Ingesting conversation...
+```
+
+## Limitations
+
+- **Always recalls** — Even when memory isn't needed
+- **No conditional logic** — Can't skip recall based on message type
+- **Fixed strategy** — Less flexibility than manual control
+
+For more control, see [Agent-Controlled Tools](/usage-patterns/agent-tools).
+
+## Next Steps
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="Agent-Controlled Tools" href="/usage-patterns/agent-tools" />
+  <Card title="Vercel AI SDK Integration" href="/integrations/vercel-ai-sdk" />
+</Cards>

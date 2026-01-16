@@ -35,7 +35,8 @@ npm install deltamemory
 import { DeltaMemory } from 'deltamemory';
 
 const db = new DeltaMemory({
-  apiKey: 'dm_your_api_key_here',
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,
   defaultCollection: 'my-app'
 });
 
@@ -58,9 +59,13 @@ pip install deltamemory
 ```
 
 ```python
+import os
 from deltamemory import DeltaMemory
 
-async with DeltaMemory(api_key='dm_your_api_key_here') as db:
+async with DeltaMemory(
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL')
+) as db:
     # Ingest with cognitive processing
     result = await db.ingest('User prefers dark mode and TypeScript')
     
@@ -72,14 +77,13 @@ async with DeltaMemory(api_key='dm_your_api_key_here') as db:
 ### Vercel AI SDK
 
 ```bash
-npm install @deltamemory/ai-sdk deltamemory
+npm install @deltamemory/ai-sdk
 ```
 
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { deltaMemoryTools } from '@deltamemory/ai-sdk';
-import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
 
 const client = new DeltaMemory({ apiKey: process.env.DELTAMEMORY_API_KEY });
 
@@ -150,20 +154,25 @@ Build and traverse concept relationships:
 
 ## Authentication
 
-Get your API key:
+Get your API key and endpoint from [app.deltamemory.com](https://app.deltamemory.com):
+
+1. Sign up and create a project
+2. Copy your API key and endpoint URL
+3. Set environment variables:
 
 ```bash
-deltamemory setup
+export DELTAMEMORY_API_KEY=dm_your_api_key_here
+export DELTAMEMORY_URL=https://your-endpoint.deltamemory.com
 ```
 
-Use via environment variable or direct configuration:
+Use in your application:
 
 ```typescript
-// Environment variable
-const db = new DeltaMemory({ apiKey: process.env.DELTAMEMORY_API_KEY });
-
-// Direct configuration
-const db = new DeltaMemory({ apiKey: 'dm_your_api_key_here' });
+// From environment variables
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
 ```
 
 ## Migration from CognitiveDB

@@ -1,0 +1,106 @@
+# Usage Patterns Overview
+
+DeltaMemory supports multiple integration patterns to fit different application architectures and use cases. Understanding these patterns helps you choose the right approach for your AI application.
+
+## The Two Patterns
+
+### 1. Automatic Mode
+
+**Best for:** Simple chatbots, assistants with consistent memory needs
+
+Memory operations happen transparently on every interaction. The framework automatically recalls relevant context before each LLM call and ingests the conversation afterward.
+
+```typescript
+// Memory is handled automatically
+const response = await generateText({
+  model: deltaMemoryModel('gpt-4', { userId: 'user-123' }),
+  prompt: 'What are my preferences?'
+});
+```
+
+**Pros:**
+- Zero friction integration
+- No agent decision-making required
+- Consistent memory behavior
+
+**Cons:**
+- Recalls on every turn (even when unnecessary)
+- Higher latency and cost
+- Less control over memory operations
+
+---
+
+### 2. Agent-Controlled Tools (Recommended)
+
+**Best for:** Complex agents, multi-step workflows, cost-sensitive applications, production use
+
+Memory operations are exposed as tools that the agent decides when to use based on the conversation context.
+
+```typescript
+const response = await generateText({
+  model: openai('gpt-4'),
+  tools: {
+    ...deltaMemoryTools(client, { userId: 'user-123' })
+  },
+  prompt: 'What are my preferences?'
+});
+```
+
+**Pros:**
+- Agent decides when memory is needed
+- More efficient (fewer unnecessary recalls)
+- Better for complex workflows
+- Full control when needed
+
+**Cons:**
+- Agent might forget to use tools
+- Requires good tool descriptions
+- Slightly more complex setup
+
+## Choosing the Right Pattern
+
+| Requirement | Recommended Pattern |
+|-------------|---------------------|
+| Quick prototype | Automatic Mode |
+| Simple chatbot | Automatic Mode |
+| Complex agent with multiple tools | Agent-Controlled Tools |
+| Multi-step workflows | Agent-Controlled Tools |
+| Cost optimization | Agent-Controlled Tools |
+| Production application | Agent-Controlled Tools |
+
+## Pattern Comparison
+
+```typescript
+// AUTOMATIC MODE
+// ✓ Simple
+// ✗ Always recalls
+const response = await generateText({
+  model: deltaMemoryModel('gpt-4', { userId }),
+  prompt: message
+});
+
+// AGENT-CONTROLLED TOOLS (Recommended)
+// ✓ Efficient
+// ✓ Agent decides
+// ✓ Full control
+const client = new DeltaMemory({ 
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+const response = await generateText({
+  model: openai('gpt-4'),
+  tools: { ...deltaMemoryTools(client, { userId }) },
+  prompt: message
+});
+```
+
+## Next Steps
+
+Explore each pattern in detail:
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="Automatic Mode" href="/usage-patterns/automatic" />
+  <Card title="Agent-Controlled Tools" href="/usage-patterns/agent-tools" />
+</Cards>

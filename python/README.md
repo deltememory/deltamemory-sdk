@@ -24,13 +24,14 @@ uv add deltamemory
 
 ```python
 import asyncio
+import os
 from deltamemory import DeltaMemory, IngestOptions, RecallOptions, RecallWeights
 
 async def main():
-    # Create client with API key
+    # Create client with credentials from dashboard
     db = DeltaMemory(
-        api_key='dm_your_api_key_here',  # Required for authentication
-        base_url='http://localhost:6969',
+        api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+        base_url=os.environ.get('DELTAMEMORY_URL'),
         default_collection='my-app'
     )
 
@@ -65,23 +66,27 @@ asyncio.run(main())
 
 ## Authentication
 
-DeltaMemory requires an API key for all requests. Get your key by running:
+Get your API key and endpoint from [app.deltamemory.com](https://app.deltamemory.com):
+
+1. Sign up and create a project
+2. Copy your API key and endpoint URL
+3. Set environment variables:
 
 ```bash
-deltamemory setup
+export DELTAMEMORY_API_KEY=dm_your_api_key_here
+export DELTAMEMORY_URL=https://your-endpoint.deltamemory.com
 ```
 
-Then use it in your client:
+Then use in your client:
 
 ```python
 import os
 from deltamemory import DeltaMemory
 
-# Direct configuration
-db = DeltaMemory(api_key='dm_your_api_key_here')
-
-# Or from environment variable
-db = DeltaMemory(api_key=os.environ.get('DELTAMEMORY_API_KEY'))
+db = DeltaMemory(
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL')
+)
 ```
 
 ## API Reference
@@ -90,8 +95,8 @@ db = DeltaMemory(api_key=os.environ.get('DELTAMEMORY_API_KEY'))
 
 ```python
 db = DeltaMemory(
-    api_key='dm_your_api_key',           # Required for authentication
-    base_url='http://localhost:6969',    # Default
+    api_key='dm_your_api_key',           # From dashboard (required)
+    base_url='https://your-endpoint.deltamemory.com',  # From dashboard
     default_collection='default',         # Default
     timeout=30.0,                          # Default (seconds)
     headers={'X-Custom': 'header'},        # Optional
@@ -100,8 +105,8 @@ db = DeltaMemory(
 # Or from config
 from deltamemory import DeltaMemoryConfig
 config = DeltaMemoryConfig(
-    api_key='dm_your_api_key',
-    base_url='http://localhost:6969'
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL')
 )
 db = DeltaMemory.from_config(config)
 ```

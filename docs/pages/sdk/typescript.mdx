@@ -1,0 +1,453 @@
+# TypeScript SDK
+
+The official TypeScript SDK for DeltaMemory provides a fully-typed, promise-based interface for integrating cognitive memory into your applications.
+
+## Installation
+
+```bash
+npm install deltamemory
+# or
+yarn add deltamemory
+# or
+pnpm add deltamemory
+```
+
+## Quick Start
+
+```typescript
+import { DeltaMemory } from 'deltamemory';
+
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,  // From dashboard
+  baseUrl: process.env.DELTAMEMORY_URL,     // Your assigned endpoint
+  defaultCollection: 'my-app'
+});
+
+// Ingest with cognitive processing
+await db.ingest('User prefers dark mode and TypeScript');
+
+// Recall with structured context
+const { profiles, events, context } = await db.recall('user preferences');
+```
+
+## Configuration
+
+### Constructor Options
+
+```typescript
+interface DeltaMemoryConfig {
+  /** API key for authentication (required) */
+  apiKey?: string;
+  
+  /** Base URL of the DeltaMemory server */
+  baseUrl?: string;          // Default: 'http://localhost:6969'
+  
+  /** Default collection for all operations */
+  defaultCollection?: string; // Default: 'default'
+  
+  /** Request timeout in milliseconds */
+  timeout?: number;          // Default: 30000
+  
+  /** Custom headers for all requests */
+  headers?: Record<string, string>;
+}
+```
+
+### Example Configuration
+
+```typescript
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,  // Your assigned endpoint from dashboard
+  defaultCollection: 'production-agent',
+  timeout: 60000,
+  headers: {
+    'X-Request-ID': crypto.randomUUID()
+  }
+});
+```
+
+## Core Methods
+
+### ingest()
+
+Ingest content with full cognitive processing. This method automatically extracts facts, concepts, user profiles, and events.
+
+```typescript
+async ingest(content: string, options?: IngestOptions): Promise<IngestResponse>
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `content` | `string` | The content to ingest |
+| `options.collection` | `string` | Override default collection |
+| `options.metadata` | `Record<string, string>` | Custom metadata |
+| `options.datetime` | `string` | ISO 8601 timestamp |
+| `options.speaker` | `string` | Speaker identifier |
+
+#### Response
+
+```typescript
+interface IngestResponse {
+  memory_ids: string[];
+  facts: ExtractedFact[];
+  concepts: ExtractedConcept[];
+}
+
+interface ExtractedFact {
+  fact: string;
+  confidence: number;
+}
+
+interface ExtractedConcept {
+  name: string;
+  type: string;
+  importance: number;
+}
+```
+
+#### Example
+
+```typescript
+const result = await db.ingest(
+  'I have a meeting with the engineering team tomorrow at 2pm to discuss the Q4 roadmap.',
+  {
+    datetime: '2024-01-15T10:30:00Z',
+    speaker: 'user',
+    metadata: { source: 'slack' }
+  }
+);
+
+console.log(result.facts);
+// [
+//   { fact: 'Has meeting with engineering team', confidence: 0.95 },
+//   { fact: 'Meeting scheduled for tomorrow 2pm', confidence: 0.92 },
+//   { fact: 'Meeting topic is Q4 roadmap', confidence: 0.88 }
+// ]
+
+console.log(result.concepts);
+// [
+//   { name: 'engineering team', type: 'organization', importance: 0.8 },
+//   { name: 'Q4 roadmap', type: 'project', importance: 0.9 }
+// ]
+```
+
+### recall()
+
+Recall memories using hybrid cognitive search. Returns structured profiles, events, and pre-formatted context.
+
+```typescript
+async recall(query: string, options?: RecallOptions): Promise<RecallResponse>
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | `string` | The search query |
+| `options.collection` | `string` | Override default collection |
+| `options.limit` | `number` | Maximum results (default: 10) |
+| `options.weights` | `RecallWeights` | Scoring weights |
+| `options.memoryTypes` | `MemoryType[]` | Filter by type |
+
+#### Recall Weights
+
+```typescript
+interface RecallWeights {
+  similarity?: number;  // Semantic similarity weight
+  recency?: number;     // Temporal recency weight
+  salience?: number;    // Importance weight
+}
+
+// Default weights
+const defaultWeights = {
+  similarity: 0.5,
+  recency: 0.3,
+  salience: 0.2
+};
+```
+
+#### Response
+
+```typescript
+interface RecallResponse {
+  results: MemoryResult[];
+  concepts: ConceptResult[];
+  graph_knowledge?: GraphKnowledge[];
+  profiles?: UserProfile[];
+  events?: UserEvent[];
+  context?: string;
+}
+
+interface UserProfile {
+  id: string;
+  topic: string;      // 'basic_info', 'work', 'interest', 'preference', etc.
+  sub_topic: string;  // 'name', 'title', 'company', 'hobbies', etc.
+  content: string;
+  confidence: number;
+  updated_at: number;
+}
+
+interface UserEvent {
+  id: string;
+  gist: string;
+  event_type: string; // 'activity', 'plan', 'milestone', 'preference', 'social'
+  mentioned_at: number;
+  event_at?: number;
+  tags: string[];
+}
+```
+
+#### Example
+
+```typescript
+const recall = await db.recall('upcoming meetings and deadlines', {
+  limit: 10,
+  weights: { similarity: 0.6, recency: 0.3, salience: 0.1 }
+});
+
+// Structured user profiles
+console.log(recall.profiles);
+// [
+//   { topic: 'work', sub_topic: 'team', content: 'engineering' },
+//   { topic: 'work', sub_topic: 'focus', content: 'Q4 roadmap' }
+// ]
+
+// Timeline events
+console.log(recall.events);
+// [
+//   { 
+//     gist: 'Meeting with engineering team',
+//     event_type: 'plan',
+//     event_at: 1705420800000,
+//     tags: ['meeting', 'engineering', 'roadmap']
+//   }
+// ]
+
+// Pre-formatted context for LLM
+console.log(recall.context);
+// "# User Memory\n## User Profile\n- work::team: engineering\n..."
+```
+
+### store()
+
+Store a memory without cognitive processing (raw mode).
+
+```typescript
+async store(content: string, options?: StoreOptions): Promise<StoreResponse>
+```
+
+```typescript
+const { id } = await db.store('Important system note', {
+  memoryType: 'Fact',
+  metadata: { priority: 'high' }
+});
+```
+
+### get()
+
+Retrieve a specific memory by ID.
+
+```typescript
+async get(id: string, collection?: string): Promise<Memory>
+```
+
+```typescript
+const memory = await db.get('mem_abc123');
+console.log(memory.content, memory.salience);
+```
+
+### delete()
+
+Delete a memory by ID.
+
+```typescript
+async delete(id: string, collection?: string): Promise<void>
+```
+
+```typescript
+await db.delete('mem_abc123');
+```
+
+## Cognitive Operations
+
+### decay()
+
+Apply salience decay to memories. Older, less-accessed memories naturally fade.
+
+```typescript
+async decay(rate?: number, collection?: string): Promise<DecayResponse>
+```
+
+```typescript
+const result = await db.decay(0.1); // 10% decay rate
+console.log(`Affected ${result.affected_count} memories`);
+```
+
+### consolidate()
+
+Merge similar memories using LLM-powered consolidation.
+
+```typescript
+async consolidate(threshold?: number, collection?: string): Promise<ConsolidateResponse>
+```
+
+```typescript
+const result = await db.consolidate(0.85); // 85% similarity threshold
+console.log(`Consolidated ${result.consolidated_count} memory groups`);
+```
+
+### reflect()
+
+Generate insights from recent memories.
+
+```typescript
+async reflect(windowSize?: number, collection?: string): Promise<ReflectResponse>
+```
+
+```typescript
+const result = await db.reflect(20);
+console.log('Insights:', result.reflection);
+```
+
+## Utility Methods
+
+### stats()
+
+Get collection statistics.
+
+```typescript
+const stats = await db.stats();
+console.log(stats);
+// {
+//   memory_count: 150,
+//   fact_count: 89,
+//   concept_count: 45,
+//   relation_count: 120,
+//   vector_count: 150,
+//   profile_count: 23,
+//   event_count: 18
+// }
+```
+
+### graph()
+
+Get knowledge graph for visualization.
+
+```typescript
+const graph = await db.graph();
+console.log(`${graph.nodes.length} nodes, ${graph.edges.length} edges`);
+```
+
+### purge()
+
+Delete all memories in a collection.
+
+```typescript
+const result = await db.purge();
+console.log(`Deleted ${result.deleted_count} memories`);
+```
+
+### health()
+
+Check server health.
+
+```typescript
+const health = await db.health();
+console.log(health.healthy, health.version);
+```
+
+## Error Handling
+
+```typescript
+import { 
+  DeltaMemoryError,
+  MemoryNotFoundError,
+  CollectionNotFoundError,
+  InvalidRequestError,
+  ConnectionError 
+} from 'deltamemory';
+
+try {
+  await db.get('non-existent-id');
+} catch (error) {
+  if (error instanceof MemoryNotFoundError) {
+    console.log('Memory not found');
+  } else if (error instanceof ConnectionError) {
+    console.log('Server unavailable:', error.message);
+  } else if (error instanceof DeltaMemoryError) {
+    console.log(`Error [${error.code}]: ${error.message}`);
+  }
+}
+```
+
+## Type Reference
+
+### Memory Types
+
+```typescript
+type MemoryType = 'Conversation' | 'Fact' | 'Insight' | 'Summary';
+```
+
+### Complete Type Exports
+
+```typescript
+import {
+  // Client
+  DeltaMemory,
+  DeltaMemoryConfig,
+  
+  // Options
+  IngestOptions,
+  RecallOptions,
+  StoreOptions,
+  RecallWeights,
+  
+  // Responses
+  IngestResponse,
+  RecallResponse,
+  StoreResponse,
+  DecayResponse,
+  ConsolidateResponse,
+  ReflectResponse,
+  StatsResponse,
+  GraphResponse,
+  HealthResponse,
+  
+  // Data Types
+  Memory,
+  MemoryResult,
+  MemoryType,
+  ExtractedFact,
+  ExtractedConcept,
+  ConceptResult,
+  GraphKnowledge,
+  UserProfile,
+  UserEvent,
+  GraphNode,
+  GraphEdge,
+  
+  // Errors
+  DeltaMemoryError,
+  MemoryNotFoundError,
+  CollectionNotFoundError,
+  InvalidRequestError,
+  ConnectionError,
+} from 'deltamemory';
+```
+
+## Migration from CognitiveDB
+
+For backward compatibility, the legacy `CognitiveDB` alias is available:
+
+```typescript
+// Legacy import still works
+import { CognitiveDB } from 'deltamemory';
+const db = new CognitiveDB({ ... });
+
+// Recommended: use DeltaMemory
+import { DeltaMemory } from 'deltamemory';
+const db = new DeltaMemory({ ... });
+```

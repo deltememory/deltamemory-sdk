@@ -24,10 +24,10 @@ pnpm add deltamemory
 ```typescript
 import { DeltaMemory } from 'deltamemory';
 
-// Create client with API key
+// Create client with credentials from dashboard
 const db = new DeltaMemory({
-  apiKey: 'dm_your_api_key_here',  // Required for authentication
-  baseUrl: 'http://localhost:6969',
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,
   defaultCollection: 'my-app'
 });
 
@@ -57,23 +57,23 @@ console.log('Context:', recall.context);
 
 ## Authentication
 
-DeltaMemory requires an API key for all requests. Get your key by running:
+Get your API key and endpoint from [app.deltamemory.com](https://app.deltamemory.com):
+
+1. Sign up and create a project
+2. Copy your API key and endpoint URL
+3. Set environment variables:
 
 ```bash
-deltamemory setup
+export DELTAMEMORY_API_KEY=dm_your_api_key_here
+export DELTAMEMORY_URL=https://your-endpoint.deltamemory.com
 ```
 
-Then use it in your client:
+Then use in your client:
 
 ```typescript
-// Direct configuration
 const db = new DeltaMemory({
-  apiKey: 'dm_your_api_key_here'
-});
-
-// Or from environment variable
-const db = new DeltaMemory({
-  apiKey: process.env.DELTAMEMORY_API_KEY
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
 });
 ```
 
@@ -83,8 +83,8 @@ const db = new DeltaMemory({
 
 ```typescript
 const db = new DeltaMemory({
-  apiKey?: string;           // API key for authentication (required)
-  baseUrl?: string;          // Default: 'http://localhost:6969'
+  apiKey?: string;           // API key from dashboard (required)
+  baseUrl?: string;          // Your endpoint from dashboard
   defaultCollection?: string; // Default: 'default'
   timeout?: number;          // Default: 30000 (ms)
   headers?: Record<string, string>;

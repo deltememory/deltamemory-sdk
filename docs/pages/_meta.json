@@ -1,0 +1,10 @@
+{
+  "index": "Introduction",
+  "quickstart": "Quick Start",
+  "---": {
+    "type": "separator"
+  },
+  "sdk": "SDKs",
+  "integrations": "Integrations",
+  "usage-patterns": "Usage Patterns"
+}

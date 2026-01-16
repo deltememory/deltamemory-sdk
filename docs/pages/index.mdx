@@ -1,0 +1,150 @@
+# DeltaMemory
+
+**The Cognitive Memory Layer for AI Applications**
+
+DeltaMemory provides production-grade long-term memory infrastructure for AI agents, assistants, and applications. Unlike simple vector stores, DeltaMemory implements a cognitive architecture that mirrors human memory systems—automatically extracting structured knowledge, maintaining temporal context, and enabling multi-hop reasoning across your data.
+
+## Why DeltaMemory?
+
+Modern AI applications require more than keyword search or basic RAG. They need memory that:
+
+- **Understands context** — Extracts structured profiles, events, and relationships automatically
+- **Reasons across knowledge** — Multi-hop graph traversal for complex queries
+- **Prioritizes relevance** — Cognitive scoring combines similarity, recency, and salience
+- **Scales efficiently** — Hybrid HNSW + SQLite architecture for production workloads
+
+## Key Features
+
+### Cognitive Processing
+
+Every piece of content ingested through DeltaMemory undergoes intelligent extraction:
+
+- **User Profiles** — Structured facts organized by topic (preferences, work, interests)
+- **Event Timeline** — Activities, plans, and milestones with temporal awareness
+- **Knowledge Graph** — Concepts and relationships for multi-hop reasoning
+- **Fact Extraction** — Discrete, queryable facts with confidence scores
+
+### Hybrid Recall
+
+DeltaMemory's recall system combines multiple signals for optimal retrieval:
+
+```
+cognitive_score = (similarity × w₁) + (recency × w₂) + (salience × w₃)
+```
+
+- **Semantic Similarity** — Vector-based relevance matching
+- **Temporal Recency** — Recent memories weighted appropriately
+- **Salience Scoring** — Important memories surface naturally
+
+### Pre-formatted Context
+
+Every recall returns a ready-to-use context string optimized for LLM consumption:
+
+```typescript
+const { context } = await db.recall('user preferences');
+// Returns formatted markdown with profiles, events, and relevant memories
+```
+
+## Enterprise-Grade Infrastructure
+
+DeltaMemory is built from the ground up for production workloads:
+
+- **High Performance** — Optimized storage engine designed for sub-millisecond recall
+- **Scalable** — Handles millions of memories with consistent performance
+- **Reliable** — Production-tested with enterprise customers
+- **Secure** — Self-hosted deployment with full data control
+
+## Quick Example
+
+```typescript
+import { DeltaMemory } from 'deltamemory';
+
+const db = new DeltaMemory({ 
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  defaultCollection: 'my-agent' 
+});
+
+// Ingest with automatic cognitive processing
+await db.ingest('I work as a senior engineer at Acme Corp. I prefer TypeScript.');
+
+// Recall with structured context
+const { profiles, events, context } = await db.recall('user background');
+
+console.log(profiles);
+// [
+//   { topic: 'work', sub_topic: 'title', content: 'senior engineer' },
+//   { topic: 'work', sub_topic: 'company', content: 'Acme Corp' },
+//   { topic: 'interest', sub_topic: 'language', content: 'TypeScript' }
+// ]
+```
+
+## Getting Started
+
+Choose your preferred SDK to begin:
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="TypeScript SDK" href="/sdk/typescript" />
+  <Card title="Python SDK" href="/sdk/python" />
+  <Card title="Quick Start Guide" href="/quickstart" />
+</Cards>
+
+## Integration Ecosystem
+
+DeltaMemory integrates seamlessly with popular AI frameworks:
+
+<Cards>
+  <Card title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" />
+  <Card title="LangChain" href="/integrations/langchain" />
+  <Card title="OpenAI Functions" href="/integrations/openai" />
+</Cards>
+
+## Licensing
+
+DeltaMemory is available as a managed service at [app.deltamemory.com](https://app.deltamemory.com). Sign up to get your API key and endpoint.
+
+## Getting Started
+
+1. **Sign up** at [app.deltamemory.com](https://app.deltamemory.com)
+2. **Create a project** and get your API key
+3. **Install the SDK** and start building
+
+```typescript
+import { DeltaMemory } from 'deltamemory';
+
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,  // From dashboard
+  baseUrl: process.env.DELTAMEMORY_URL,     // Your assigned endpoint
+});
+```
+
+## Multi-Tenant Architecture
+
+DeltaMemory is designed for multi-tenant SaaS applications. Each API key is bound to a specific tenant, providing complete data isolation:
+
+```typescript
+// Each API key routes to an isolated tenant
+const tenant1 = new DeltaMemory({ apiKey: 'dm_tenant1_key' });
+const tenant2 = new DeltaMemory({ apiKey: 'dm_tenant2_key' });
+
+// Data is completely isolated between tenants
+await tenant1.ingest('Tenant 1 data');  // Stored in tenant1's isolated storage
+await tenant2.ingest('Tenant 2 data');  // Stored in tenant2's isolated storage
+```
+
+**Key features:**
+- API key determines tenant routing automatically
+- Complete storage isolation (WAL, SSTables, vector index, graph)
+- No cross-tenant data leakage
+- Per-tenant rate limiting and quotas
+
+For multi-user isolation within a single tenant, use collections:
+
+```typescript
+const db = new DeltaMemory({ apiKey: process.env.DELTAMEMORY_API_KEY });
+
+// Isolate users within your tenant using collections
+await db.ingest('User 1 preference', { collection: 'user-123' });
+await db.ingest('User 2 preference', { collection: 'user-456' });
+```

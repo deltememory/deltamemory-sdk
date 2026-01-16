@@ -1,0 +1,416 @@
+# Agent-Controlled Tools
+
+In agent-controlled mode, memory operations are exposed as tools that the AI agent decides when to use. This pattern provides efficiency and flexibility for complex workflows while maintaining intelligent memory behavior.
+
+## When to Use
+
+- **Complex agents** — Multi-step workflows with various tools
+- **Cost optimization** — Avoid unnecessary memory operations
+- **Selective memory** — Agent decides what's worth remembering
+- **Production applications** — Balance between automation and control
+
+## How It Works
+
+```
+User Message → Agent Reasoning → [Optional] Recall Tool → LLM Response → [Optional] Store Tool
+```
+
+1. User sends a message
+2. Agent analyzes if memory is needed
+3. Agent calls `recallMemory` tool if context required
+4. LLM generates response with retrieved context
+5. Agent calls `storeMemory` tool if information is worth saving
+
+## Implementation
+
+### With Vercel AI SDK
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  messages: [
+    {
+      role: 'system',
+      content: 'You are a helpful assistant. Use memory tools to recall past context and store important information.'
+    },
+    {
+      role: 'user',
+      content: 'What are my preferences?'
+    }
+  ],
+  tools: {
+    ...deltaMemoryTools(client, {
+      userId: 'user-123'
+    })
+  },
+  maxToolRoundtrips: 5
+});
+
+console.log(text);
+```
+
+### With LangChain
+
+```python
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_tool_calling_agent, AgentExecutor
+from deltamemory.langchain import get_deltamemory_tools
+import os
+
+# Create DeltaMemory tools
+tools = get_deltamemory_tools(
+    deltamemory_url=os.environ.get('DELTAMEMORY_URL'),
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    user_id="user-123"
+)
+
+# Create agent with memory tools
+llm = ChatOpenAI(model="gpt-4")
+agent = create_tool_calling_agent(llm, tools, prompt)
+agent_executor = AgentExecutor(agent=agent, tools=tools)
+
+# Agent decides when to use memory
+response = agent_executor.invoke({
+    "input": "What are my preferences?"
+})
+print(response["output"])
+```
+
+### With OpenAI Functions
+
+```typescript
+import OpenAI from 'openai';
+import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryFunctions } from '@deltamemory/openai';
+
+const openai = new OpenAI();
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+const functions = deltaMemoryFunctions(client, { userId: 'user-123' });
+
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  messages: [
+    { role: 'system', content: 'You are a helpful assistant with memory capabilities.' },
+    { role: 'user', content: 'What are my preferences?' }
+  ],
+  functions: functions.definitions,
+  function_call: 'auto'
+});
+
+// Handle function calls
+if (response.choices[0].message.function_call) {
+  const result = await functions.execute(
+    response.choices[0].message.function_call
+  );
+  // Continue conversation with function result...
+}
+```
+
+## Available Tools
+
+### recallMemory
+
+Search past conversations and user context.
+
+**When to use:**
+- User references past events ("remember when...")
+- User asks about preferences or history
+- Context seems missing for the query
+- Personalization would improve the response
+
+```typescript
+{
+  name: 'recallMemory',
+  description: 'Search past conversations and user context. Use when: user references past events, asks about preferences, or context seems missing.',
+  parameters: {
+    query: {
+      type: 'string',
+      description: 'What to search for in memory'
+    },
+    limit: {
+      type: 'number',
+      description: 'Maximum number of memories to retrieve',
+      default: 5
+    }
+  }
+}
+```
+
+**Returns:**
+
+```typescript
+{
+  profiles: UserProfile[],  // Structured user facts
+  events: UserEvent[],      // Timeline entries
+  context: string           // Pre-formatted for LLM
+}
+```
+
+### storeMemory
+
+Store important information for future reference.
+
+**When to use:**
+- User shares preferences or personal information
+- User asks to remember something
+- Important facts emerge from conversation
+- Information is generalizable beyond current context
+
+```typescript
+{
+  name: 'storeMemory',
+  description: 'Store important information for future reference. Use when: user shares preferences, asks to remember something, or important facts emerge.',
+  parameters: {
+    content: {
+      type: 'string',
+      description: 'Information to remember'
+    },
+    importance: {
+      type: 'string',
+      enum: ['low', 'medium', 'high'],
+      description: 'Importance level of this memory'
+    }
+  }
+}
+```
+
+**Returns:**
+
+```typescript
+{
+  memoryIds: string[],
+  extractedFacts: string[]
+}
+```
+
+## Complete Example
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chat(userId: string, message: string) {
+  const { text, toolCalls } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      {
+        role: 'system',
+        content: `You are a helpful assistant with memory capabilities.
+        
+Use the recallMemory tool when:
+- User references past conversations
+- User asks about their preferences or history
+- Context would improve your response
+
+Use the storeMemory tool when:
+- User shares important preferences
+- User explicitly asks you to remember something
+- Key facts emerge that would be useful later`
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ],
+    tools: {
+      ...deltaMemoryTools(client, { userId })
+    },
+    maxToolRoundtrips: 5
+  });
+
+  // Log tool usage for debugging
+  if (toolCalls && toolCalls.length > 0) {
+    console.log('Tools used:', toolCalls.map(tc => tc.toolName));
+  }
+
+  return text;
+}
+
+// Example conversation
+const userId = 'user-123';
+
+// First message - agent stores preference
+const response1 = await chat(userId, 'I prefer TypeScript over JavaScript');
+// Agent calls storeMemory tool
+// Response: "Got it! I've noted that you prefer TypeScript."
+
+// Second message - agent recalls preference
+const response2 = await chat(userId, 'What programming language should I use for my project?');
+// Agent calls recallMemory tool
+// Response: "Based on your preference for TypeScript, I'd recommend..."
+
+// Third message - no memory needed
+const response3 = await chat(userId, 'What is 2 + 2?');
+// Agent doesn't call any memory tools
+// Response: "2 + 2 equals 4."
+```
+
+## Tool Descriptions Matter
+
+The quality of tool descriptions directly impacts agent behavior. Good descriptions help the agent understand when to use memory.
+
+### Good Tool Description
+
+```typescript
+{
+  name: 'recallMemory',
+  description: `Search past conversations and user context.
+  
+Use this tool when:
+- User references past events ("remember when...", "last time...")
+- User asks about their preferences, history, or past interactions
+- Context from previous conversations would improve your response
+- Personalization based on user history is beneficial
+
+Do NOT use when:
+- Answering general knowledge questions
+- Performing calculations or factual lookups
+- User is asking about something for the first time`,
+  parameters: { ... }
+}
+```
+
+### Poor Tool Description
+
+```typescript
+{
+  name: 'recallMemory',
+  description: 'Get memories',  // Too vague
+  parameters: { ... }
+}
+```
+
+## Optimizing Tool Usage
+
+### Limit Tool Roundtrips
+
+Control how many times the agent can call tools:
+
+```typescript
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  tools: { ...deltaMemoryTools(client, { userId }) },
+  maxToolRoundtrips: 3  // Prevent excessive tool calls
+});
+```
+
+### Parallel Tool Calls
+
+Some frameworks support parallel tool execution:
+
+```typescript
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  tools: { ...deltaMemoryTools(client, { userId }) },
+  toolChoice: 'auto',
+  parallel_tool_calls: true  // Call multiple tools simultaneously
+});
+```
+
+### Custom Tool Logic
+
+Add custom logic to tool execution:
+
+```typescript
+import { tool } from 'ai';
+import { z } from 'zod';
+
+const customRecallTool = tool({
+  description: 'Search past conversations...',
+  parameters: z.object({
+    query: z.string(),
+    limit: z.number().optional()
+  }),
+  execute: async ({ query, limit }) => {
+    // Custom pre-processing
+    const enhancedQuery = enhanceQuery(query);
+    
+    // Call DeltaMemory
+    const result = await client.recall(enhancedQuery, {
+      collection: 'user-123',
+      limit: limit || 5
+    });
+    
+    // Custom post-processing
+    return formatForAgent(result);
+  }
+});
+```
+
+## Monitoring Tool Usage
+
+Track which tools are being called:
+
+```typescript
+const { text, toolCalls } = await generateText({
+  model: openai('gpt-4'),
+  tools: { ...deltaMemoryTools(client, { userId }) },
+  maxToolRoundtrips: 5
+});
+
+// Log tool usage
+console.log('Tool calls:', toolCalls?.map(tc => ({
+  tool: tc.toolName,
+  args: tc.args,
+  result: tc.result
+})));
+
+// Analytics
+if (toolCalls) {
+  const recallCount = toolCalls.filter(tc => tc.toolName === 'recallMemory').length;
+  const storeCount = toolCalls.filter(tc => tc.toolName === 'storeMemory').length;
+  console.log(`Recalls: ${recallCount}, Stores: ${storeCount}`);
+}
+```
+
+## Performance Benefits
+
+Compared to automatic mode, agent-controlled tools provide:
+
+- **50-70% fewer recall operations** — Agent only recalls when needed
+- **Lower latency** — No recall overhead on simple queries
+- **Reduced costs** — Fewer API calls and token usage
+- **Better UX** — Faster responses for non-memory queries
+
+## Limitations
+
+- **Agent might forget** — LLM might not call tools when it should
+- **Requires good prompts** — Tool descriptions must be clear
+- **More complex** — Requires understanding of tool calling
+- **Model dependent** — Quality varies by LLM capability
+
+## Best Practices
+
+1. **Write clear tool descriptions** — Include when to use and when not to use
+2. **Limit tool roundtrips** — Prevent excessive tool calling
+3. **Monitor tool usage** — Track and optimize tool call patterns
+4. **Test edge cases** — Ensure agent calls tools appropriately
+5. **Provide examples** — Show the agent how to use tools in system prompt
+
+## Next Steps
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="Vercel AI SDK Integration" href="/integrations/vercel-ai-sdk" />
+  <Card title="LangChain Integration" href="/integrations/langchain" />
+</Cards>

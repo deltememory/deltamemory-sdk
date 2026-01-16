@@ -1,0 +1,494 @@
+# Vercel AI SDK Integration
+
+DeltaMemory integrates seamlessly with the Vercel AI SDK, providing memory capabilities for your AI applications with minimal configuration.
+
+## Installation
+
+```bash
+npm install @deltamemory/ai-sdk
+```
+
+The `deltamemory` client is bundled with the package.
+
+## Quick Start
+
+```typescript
+import { generateText } from 'ai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+import { openai } from '@ai-sdk/openai';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  messages: [
+    { role: 'user', content: 'What are my preferences?' }
+  ],
+  tools: {
+    ...deltaMemoryTools(client, { userId: 'user-123' })
+  }
+});
+```
+
+## Integration Patterns
+
+### 1. Agent-Controlled Tools (Recommended)
+
+Let the AI agent decide when to use memory:
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chat(userId: string, message: string) {
+  const { text } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant with memory. Use memory tools to recall context and store important information.'
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ],
+    tools: {
+      ...deltaMemoryTools(client, { userId })
+    },
+    maxToolRoundtrips: 5
+  });
+
+  return text;
+}
+
+// Usage
+await chat('user-123', 'I prefer dark mode');
+// Agent stores: "User prefers dark mode"
+
+await chat('user-123', 'What theme should I use?');
+// Agent recalls preference and suggests dark mode
+```
+
+### 2. Manual Control
+
+Explicitly control memory operations:
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { DeltaMemory } from 'deltamemory';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chat(userId: string, message: string) {
+  // Recall relevant memories
+  const recall = await client.recall(message, { collection: `user-${userId}` });
+  
+  // Generate response with memory context
+  const { text } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      {
+        role: 'system',
+        content: recall.context || 'You are a helpful assistant.'
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ]
+  });
+
+  // Store conversation
+  await client.ingest(`User: ${message}\nAssistant: ${text}`, {
+    collection: `user-${userId}`,
+    metadata: { userId },
+    speaker: 'user'
+  });
+
+  return text;
+}
+```
+
+## Streaming Support
+
+DeltaMemory works with streaming responses:
+
+```typescript
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chatStream(userId: string, message: string) {
+  const { textStream, toolCalls } = await streamText({
+    model: openai('gpt-4'),
+    messages: [
+      { role: 'user', content: message }
+    ],
+    tools: {
+      ...deltaMemoryTools(client, { userId })
+    }
+  });
+
+  // Stream response to client
+  for await (const chunk of textStream) {
+    process.stdout.write(chunk);
+  }
+
+  // Tool calls are available after streaming
+  console.log('Tools used:', toolCalls);
+}
+```
+
+## Multi-User Support
+
+Handle multiple users with collection-based isolation:
+
+```typescript
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chat(userId: string, message: string) {
+  const { text } = await generateText({
+    model: openai('gpt-4'),
+    messages: [{ role: 'user', content: message }],
+    tools: {
+      ...deltaMemoryTools(client, {
+        userId,
+        collection: `user-${userId}`  // Isolate memories per user
+      })
+    }
+  });
+
+  return text;
+}
+```
+
+## Tool Configuration
+
+### Custom Tool Descriptions
+
+Customize how the agent understands memory tools:
+
+```typescript
+import { tool } from 'ai';
+import { z } from 'zod';
+import { DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+const customMemoryTools = {
+  recallMemory: tool({
+    description: `Search user's past conversations and preferences.
+    
+Use when:
+- User asks "what do you know about me?"
+- User references past interactions
+- Personalization would improve the response
+
+Returns structured profiles, events, and formatted context.`,
+    parameters: z.object({
+      query: z.string().describe('What to search for'),
+      limit: z.number().optional().describe('Max results (default: 5)')
+    }),
+    execute: async ({ query, limit }) => {
+      const result = await client.recall(query, {
+        userId: 'user-123',
+        limit: limit || 5
+      });
+      return {
+        profiles: result.profiles,
+        events: result.events,
+        context: result.context
+      };
+    }
+  }),
+
+  storeMemory: tool({
+    description: 'Store important user information for future reference.',
+    parameters: z.object({
+      content: z.string().describe('Information to remember'),
+      importance: z.enum(['low', 'medium', 'high']).optional()
+    }),
+    execute: async ({ content, importance }) => {
+      const result = await client.ingest(content, {
+        metadata: { userId: 'user-123', importance: importance || 'medium' }
+      });
+      return {
+        stored: true,
+        facts: result.facts.map(f => f.fact)
+      };
+    }
+  })
+};
+
+// Use custom tools
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  messages: [{ role: 'user', content: 'I prefer TypeScript' }],
+  tools: customMemoryTools
+});
+```
+
+## Advanced Patterns
+
+### Conditional Memory Injection
+
+Only inject memory for certain message types:
+
+```typescript
+async function chat(userId: string, message: string, messageType: string) {
+  let systemPrompt = 'You are a helpful assistant.';
+
+  // Only recall for personal queries
+  if (messageType === 'personal' || messageType === 'preference') {
+    const recall = await client.recall(message, { collection: `user-${userId}` });
+    systemPrompt = recall.context || systemPrompt;
+  }
+
+  const { text } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message }
+    ]
+  });
+
+  return text;
+}
+```
+
+### Memory with Multiple Models
+
+Use different models for different tasks:
+
+```typescript
+import { openai } from '@ai-sdk/openai';
+import { anthropic } from '@ai-sdk/anthropic';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY
+});
+
+async function chat(userId: string, message: string) {
+  // Use fast model for memory search
+  const recall = await client.recall(message, {
+    collection: `user-${userId}`,
+    limit: 3
+  });
+
+  // Use powerful model for response
+  const { text } = await generateText({
+    model: anthropic('claude-3-5-sonnet-20241022'),
+    messages: [
+      { role: 'system', content: recall.context },
+      { role: 'user', content: message }
+    ]
+  });
+
+  // Store with metadata
+  await client.ingest(`User: ${message}\nAssistant: ${text}`, {
+    collection: `user-${userId}`,
+    metadata: { userId, model: 'claude-3-5-sonnet' }
+  });
+
+  return text;
+}
+```
+
+### Conversation History + Memory
+
+Combine short-term conversation history with long-term memory:
+
+```typescript
+interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const conversationHistory: Message[] = [];
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY
+});
+
+async function chat(userId: string, message: string) {
+  // Get long-term memory
+  const recall = await client.recall(message, { collection: `user-${userId}`, limit: 5 });
+
+  // Add to conversation history
+  conversationHistory.push({ role: 'user', content: message });
+
+  // Keep only last 10 messages in short-term history
+  const recentHistory = conversationHistory.slice(-10);
+
+  const { text } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      {
+        role: 'system',
+        content: `You are a helpful assistant.
+
+# Long-term Memory
+${recall.context || 'No relevant memories found.'}
+
+# Recent Conversation
+Use the message history below for immediate context.`
+      },
+      ...recentHistory
+    ]
+  });
+
+  conversationHistory.push({ role: 'assistant', content: text });
+
+  // Periodically consolidate conversation into long-term memory
+  if (conversationHistory.length % 20 === 0) {
+    const summary = conversationHistory.slice(-20)
+      .map(m => `${m.role}: ${m.content}`)
+      .join('\n');
+    await client.ingest(summary, { collection: `user-${userId}`, metadata: { userId, type: 'summary' } });
+  }
+
+  return text;
+}
+```
+
+## Error Handling
+
+```typescript
+import { generateText } from 'ai';
+import { deltaMemoryTools, DeltaMemory, ConnectionError } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function chat(userId: string, message: string) {
+  try {
+    const { text } = await generateText({
+      model: openai('gpt-4'),
+      messages: [{ role: 'user', content: message }],
+      tools: {
+        ...deltaMemoryTools(client, { userId })
+      }
+    });
+    return text;
+  } catch (error) {
+    if (error instanceof ConnectionError) {
+      // Fallback: continue without memory
+      console.warn('DeltaMemory unavailable, continuing without memory');
+      const { text } = await generateText({
+        model: openai('gpt-4'),
+        messages: [{ role: 'user', content: message }]
+      });
+      return text;
+    }
+    throw error;
+  }
+}
+```
+
+## Complete Example: Chat Application
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools } from '@deltamemory/ai-sdk';
+import { DeltaMemory } from 'deltamemory';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL || 'http://localhost:6969'
+});
+
+interface ChatRequest {
+  userId: string;
+  message: string;
+  sessionId?: string;
+}
+
+async function chat({ userId, message, sessionId }: ChatRequest) {
+  const { text, toolCalls } = await generateText({
+    model: openai('gpt-4'),
+    messages: [
+      {
+        role: 'system',
+        content: `You are a helpful AI assistant with memory capabilities.
+
+Use the recallMemory tool to search past conversations when:
+- User asks about their preferences or history
+- User references past interactions
+- Context would improve your response
+
+Use the storeMemory tool to save:
+- User preferences and personal information
+- Important facts from the conversation
+- Information the user explicitly asks you to remember`
+      },
+      {
+        role: 'user',
+        content: message
+      }
+    ],
+    tools: {
+      ...deltaMemoryTools(client, {
+        userId,
+        collection: `user-${userId}`,
+        metadata: { sessionId }
+      })
+    },
+    maxToolRoundtrips: 5
+  });
+
+  return {
+    response: text,
+    toolsUsed: toolCalls?.map(tc => tc.toolName) || []
+  };
+}
+
+// Usage
+const result = await chat({
+  userId: 'user-123',
+  message: 'I prefer TypeScript and dark mode',
+  sessionId: 'session-456'
+});
+
+console.log(result.response);
+console.log('Tools used:', result.toolsUsed);
+```
+
+## Next Steps
+
+import { Cards, Card } from 'nextra/components'
+
+<Cards>
+  <Card title="Usage Patterns" href="/usage-patterns" />
+  <Card title="TypeScript SDK" href="/sdk/typescript" />
+  <Card title="LangChain Integration" href="/integrations/langchain" />
+</Cards>

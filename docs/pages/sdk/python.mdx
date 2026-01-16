@@ -1,0 +1,520 @@
+# Python SDK
+
+The official Python SDK for DeltaMemory provides a fully-typed, async interface for integrating cognitive memory into your applications.
+
+## Installation
+
+```bash
+pip install deltamemory
+# or
+poetry add deltamemory
+# or
+uv add deltamemory
+```
+
+## Quick Start
+
+```python
+import asyncio
+import os
+from deltamemory import DeltaMemory
+
+async def main():
+    db = DeltaMemory(
+        api_key=os.environ.get('DELTAMEMORY_API_KEY'),  # From dashboard
+        base_url=os.environ.get('DELTAMEMORY_URL'),     # Your assigned endpoint
+        default_collection='my-app'
+    )
+
+    async with db:
+        # Ingest with cognitive processing
+        await db.ingest('User prefers dark mode and TypeScript')
+
+        # Recall with structured context
+        recall = await db.recall('user preferences')
+        print(recall.profiles)
+        print(recall.events)
+        print(recall.context)
+
+asyncio.run(main())
+```
+
+## Configuration
+
+### Constructor Options
+
+```python
+class DeltaMemory:
+    def __init__(
+        self,
+        api_key: Optional[str] = None,  # Required for authentication
+        base_url: str = 'http://localhost:6969',
+        default_collection: str = 'default',
+        timeout: float = 30.0,
+        headers: Optional[dict[str, str]] = None
+    )
+```
+
+### Example Configuration
+
+```python
+import os
+from deltamemory import DeltaMemory
+
+db = DeltaMemory(
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL'),  # Your assigned endpoint from dashboard
+    default_collection='production-agent',
+    timeout=60.0,
+    headers={'X-Request-ID': 'unique-id'}
+)
+```
+
+### Using Config Object
+
+```python
+import os
+from deltamemory import DeltaMemory, DeltaMemoryConfig
+
+config = DeltaMemoryConfig(
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL'),
+    default_collection='my-app',
+    timeout=30.0
+)
+
+db = DeltaMemory.from_config(config)
+```
+
+## Core Methods
+
+### ingest()
+
+Ingest content with full cognitive processing.
+
+```python
+async def ingest(
+    self,
+    content: str,
+    options: Optional[IngestOptions] = None
+) -> IngestResponse
+```
+
+#### Parameters
+
+```python
+from deltamemory import IngestOptions
+
+options = IngestOptions(
+    collection='custom-collection',
+    metadata={'source': 'chat', 'user_id': '123'},
+    datetime='2024-01-15T10:30:00Z',
+    speaker='user'
+)
+```
+
+#### Response
+
+```python
+from deltamemory import IngestResponse, ExtractedFact, ExtractedConcept
+
+@dataclass
+class IngestResponse:
+    memory_ids: list[str]
+    facts: list[ExtractedFact]
+    concepts: list[ExtractedConcept]
+
+@dataclass
+class ExtractedFact:
+    fact: str
+    confidence: float
+
+@dataclass
+class ExtractedConcept:
+    name: str
+    type: str
+    importance: float
+```
+
+#### Example
+
+```python
+from deltamemory import IngestOptions
+
+result = await db.ingest(
+    'I have a meeting with the engineering team tomorrow at 2pm to discuss the Q4 roadmap.',
+    IngestOptions(
+        datetime='2024-01-15T10:30:00Z',
+        speaker='user',
+        metadata={'source': 'slack'}
+    )
+)
+
+print('Memory IDs:', result.memory_ids)
+print('Facts:', result.facts)
+# [
+#   ExtractedFact(fact='Has meeting with engineering team', confidence=0.95),
+#   ExtractedFact(fact='Meeting scheduled for tomorrow 2pm', confidence=0.92),
+#   ExtractedFact(fact='Meeting topic is Q4 roadmap', confidence=0.88)
+# ]
+
+print('Concepts:', result.concepts)
+# [
+#   ExtractedConcept(name='engineering team', type='organization', importance=0.8),
+#   ExtractedConcept(name='Q4 roadmap', type='project', importance=0.9)
+# ]
+```
+
+### recall()
+
+Recall memories using hybrid cognitive search.
+
+```python
+async def recall(
+    self,
+    query: str,
+    options: Optional[RecallOptions] = None
+) -> RecallResponse
+```
+
+#### Parameters
+
+```python
+from deltamemory import RecallOptions, RecallWeights, MemoryType
+
+options = RecallOptions(
+    collection='custom-collection',
+    limit=10,
+    weights=RecallWeights(
+        similarity=0.6,
+        recency=0.3,
+        salience=0.1
+    ),
+    memory_types=[MemoryType.FACT, MemoryType.INSIGHT]
+)
+```
+
+#### Response
+
+```python
+from deltamemory import RecallResponse, UserProfile, UserEvent
+
+@dataclass
+class RecallResponse:
+    results: list[MemoryResult]
+    concepts: list[ConceptResult]
+    graph_knowledge: Optional[list[GraphKnowledge]]
+    profiles: Optional[list[UserProfile]]
+    events: Optional[list[UserEvent]]
+    context: Optional[str]
+
+@dataclass
+class UserProfile:
+    id: str
+    topic: str          # 'basic_info', 'work', 'interest', 'preference'
+    sub_topic: str      # 'name', 'title', 'company', 'hobbies'
+    content: str
+    confidence: float
+    updated_at: int
+
+@dataclass
+class UserEvent:
+    id: str
+    gist: str
+    event_type: str     # 'activity', 'plan', 'milestone', 'preference', 'social'
+    mentioned_at: int
+    event_at: Optional[int]
+    tags: list[str]
+```
+
+#### Example
+
+```python
+from deltamemory import RecallOptions, RecallWeights
+
+recall = await db.recall(
+    'upcoming meetings and deadlines',
+    RecallOptions(
+        limit=10,
+        weights=RecallWeights(similarity=0.6, recency=0.3, salience=0.1)
+    )
+)
+
+# Structured user profiles
+for profile in recall.profiles:
+    print(f"{profile.topic}::{profile.sub_topic}: {profile.content}")
+# work::team: engineering
+# work::focus: Q4 roadmap
+
+# Timeline events
+for event in recall.events:
+    print(f"{event.event_type}: {event.gist}")
+    print(f"  Tags: {', '.join(event.tags)}")
+# plan: Meeting with engineering team
+#   Tags: meeting, engineering, roadmap
+
+# Pre-formatted context for LLM
+print(recall.context)
+# "# User Memory\n## User Profile\n- work::team: engineering\n..."
+```
+
+### store()
+
+Store a memory without cognitive processing.
+
+```python
+async def store(
+    self,
+    content: str,
+    options: Optional[StoreOptions] = None
+) -> StoreResponse
+```
+
+```python
+from deltamemory import StoreOptions, MemoryType
+
+response = await db.store(
+    'Important system note',
+    StoreOptions(
+        memory_type=MemoryType.FACT,
+        metadata={'priority': 'high'}
+    )
+)
+print(f"Stored with ID: {response.id}")
+```
+
+### get()
+
+Retrieve a specific memory by ID.
+
+```python
+async def get(self, id: str, collection: Optional[str] = None) -> Memory
+```
+
+```python
+memory = await db.get('mem_abc123')
+print(memory.content, memory.salience)
+```
+
+### delete()
+
+Delete a memory by ID.
+
+```python
+async def delete(self, id: str, collection: Optional[str] = None) -> None
+```
+
+```python
+await db.delete('mem_abc123')
+```
+
+## Cognitive Operations
+
+### decay()
+
+Apply salience decay to memories.
+
+```python
+async def decay(
+    self,
+    rate: float = 0.1,
+    collection: Optional[str] = None
+) -> DecayResponse
+```
+
+```python
+result = await db.decay(rate=0.1)
+print(f"Affected {result.affected_count} memories")
+```
+
+### consolidate()
+
+Merge similar memories using LLM-powered consolidation.
+
+```python
+async def consolidate(
+    self,
+    threshold: float = 0.8,
+    collection: Optional[str] = None
+) -> ConsolidateResponse
+```
+
+```python
+result = await db.consolidate(threshold=0.85)
+print(f"Consolidated {result.consolidated_count} memory groups")
+```
+
+### reflect()
+
+Generate insights from recent memories.
+
+```python
+async def reflect(
+    self,
+    window_size: int = 10,
+    collection: Optional[str] = None
+) -> ReflectResponse
+```
+
+```python
+result = await db.reflect(window_size=20)
+print('Insights:', result.reflection)
+```
+
+## Utility Methods
+
+### stats()
+
+Get collection statistics.
+
+```python
+stats = await db.stats()
+print(f"Memories: {stats.memory_count}")
+print(f"Profiles: {stats.profile_count}")
+print(f"Events: {stats.event_count}")
+print(f"Concepts: {stats.concept_count}")
+```
+
+### graph()
+
+Get knowledge graph for visualization.
+
+```python
+graph = await db.graph()
+print(f"{len(graph.nodes)} nodes, {len(graph.edges)} edges")
+
+for node in graph.nodes:
+    print(f"Node: {node.name} ({node.node_type})")
+
+for edge in graph.edges:
+    print(f"Edge: {edge.from_node} --[{edge.relation_type}]--> {edge.to_node}")
+```
+
+### purge()
+
+Delete all memories in a collection.
+
+```python
+result = await db.purge()
+print(f"Deleted {result.deleted_count} memories")
+```
+
+### health()
+
+Check server health.
+
+```python
+health = await db.health()
+print(f"Healthy: {health.healthy}, Version: {health.version}")
+```
+
+## Context Manager
+
+The client supports async context manager for automatic cleanup:
+
+```python
+async with DeltaMemory() as db:
+    await db.ingest('Hello world')
+    result = await db.recall('greetings')
+    # Client is automatically closed when exiting
+```
+
+## Error Handling
+
+```python
+from deltamemory import (
+    DeltaMemoryError,
+    MemoryNotFoundError,
+    CollectionNotFoundError,
+    InvalidRequestError,
+    ServerUnavailableError,
+    ConnectionError,
+)
+
+try:
+    await db.get('non-existent-id')
+except MemoryNotFoundError:
+    print('Memory not found')
+except ConnectionError as e:
+    print(f'Server unavailable: {e.message}')
+except DeltaMemoryError as e:
+    print(f'Error [{e.code}]: {e.message}')
+```
+
+## Type Reference
+
+### Enums
+
+```python
+from deltamemory import MemoryType
+
+class MemoryType(Enum):
+    CONVERSATION = "Conversation"
+    FACT = "Fact"
+    INSIGHT = "Insight"
+    SUMMARY = "Summary"
+```
+
+### Complete Type Exports
+
+```python
+from deltamemory import (
+    # Client
+    DeltaMemory,
+    DeltaMemoryConfig,
+    
+    # Options
+    IngestOptions,
+    RecallOptions,
+    StoreOptions,
+    RecallWeights,
+    
+    # Responses
+    IngestResponse,
+    RecallResponse,
+    StoreResponse,
+    DecayResponse,
+    ConsolidateResponse,
+    ReflectResponse,
+    StatsResponse,
+    GraphResponse,
+    HealthResponse,
+    PurgeResponse,
+    
+    # Data Types
+    Memory,
+    MemoryResult,
+    MemoryType,
+    ExtractedFact,
+    ExtractedConcept,
+    ConceptResult,
+    ConceptRelation,
+    GraphKnowledge,
+    UserProfile,
+    UserEvent,
+    GraphNode,
+    GraphEdge,
+    
+    # Errors
+    DeltaMemoryError,
+    MemoryNotFoundError,
+    CollectionNotFoundError,
+    InvalidRequestError,
+    ServerUnavailableError,
+    ConnectionError,
+)
+```
+
+## Migration from CognitiveDB
+
+For backward compatibility, the legacy `CognitiveDB` alias is available:
+
+```python
+# Legacy import still works
+from deltamemory import CognitiveDB
+db = CognitiveDB(...)
+
+# Recommended: use DeltaMemory
+from deltamemory import DeltaMemory
+db = DeltaMemory(...)
+```

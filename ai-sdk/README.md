@@ -5,24 +5,25 @@ DeltaMemory integration for Vercel AI SDK. Provides memory tools that AI agents 
 ## Installation
 
 ```bash
-npm install @deltamemory/ai-sdk deltamemory
+npm install @deltamemory/ai-sdk
 # or
-yarn add @deltamemory/ai-sdk deltamemory
+yarn add @deltamemory/ai-sdk
 # or
-pnpm add @deltamemory/ai-sdk deltamemory
+pnpm add @deltamemory/ai-sdk
 ```
+
+The `deltamemory` client is included as a dependency, so you don't need to install it separately.
 
 ## Quick Start
 
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { deltaMemoryTools } from '@deltamemory/ai-sdk';
-import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
 
 const client = new DeltaMemory({
-  apiKey: 'dm_your_api_key_here',  // Required for authentication
-  baseUrl: 'http://localhost:6969'
+  apiKey: process.env.DELTAMEMORY_API_KEY,  // From dashboard
+  baseUrl: process.env.DELTAMEMORY_URL      // Your assigned endpoint
 });
 
 const { text } = await generateText({
@@ -108,11 +109,11 @@ Store important information for future reference.
 ```typescript
 import { generateText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { deltaMemoryTools } from '@deltamemory/ai-sdk';
-import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
 
 const client = new DeltaMemory({
-  apiKey: process.env.DELTAMEMORY_API_KEY
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
 });
 
 async function chat(userId: string, message: string) {
@@ -138,11 +139,11 @@ await chat('user-123', 'What programming language should I use?');
 ```typescript
 import { streamText } from 'ai';
 import { openai } from '@ai-sdk/openai';
-import { deltaMemoryTools } from '@deltamemory/ai-sdk';
-import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
 
 const client = new DeltaMemory({
-  apiKey: process.env.DELTAMEMORY_API_KEY
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
 });
 
 async function chatStream(userId: string, message: string) {
@@ -163,11 +164,11 @@ async function chatStream(userId: string, message: string) {
 ### Multi-User
 
 ```typescript
-import { deltaMemoryTools } from '@deltamemory/ai-sdk';
-import { DeltaMemory } from 'deltamemory';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
 
 const client = new DeltaMemory({
-  apiKey: process.env.DELTAMEMORY_API_KEY
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
 });
 
 async function chat(userId: string, message: string) {
