@@ -1,7 +1,7 @@
 {
   "name": "@deltamemory/ai-sdk",
   "type": "module",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "description": "DeltaMemory integration for Vercel AI SDK",
   "publishConfig": {
     "access": "public"
@@ -36,8 +36,8 @@
     "directory": "sdks/ai-sdk"
   },
   "dependencies": {
-    "ai": "^5.0.0",
-    "deltamemory": "^0.1.0",
+    "ai": "^6.0.39",
+    "deltamemory": "^0.2.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
