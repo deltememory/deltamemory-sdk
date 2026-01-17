@@ -1,0 +1,125 @@
+# MCP Server
+
+Give AI assistants like Claude, Cursor, and other MCP-compatible clients persistent memory capabilities through the Model Context Protocol.
+
+## Installation
+
+```bash
+npm install @deltamemory/mcp
+```
+
+Or run directly with npx:
+
+```bash
+npx @deltamemory/mcp
+```
+
+## Configuration
+
+Add to your MCP client configuration:
+
+### Claude Desktop
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+
+```json
+{
+  "mcpServers": {
+    "deltamemory": {
+      "command": "npx",
+      "args": ["-y", "@deltamemory/mcp"],
+      "env": {
+        "DELTAMEMORY_API_KEY": "dm_your_api_key",
+        "DELTAMEMORY_URL": "https://your-endpoint.deltamemory.com",
+        "DELTAMEMORY_COLLECTION": "claude-memory"
+      }
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to your Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "deltamemory": {
+      "command": "npx",
+      "args": ["-y", "@deltamemory/mcp"],
+      "env": {
+        "DELTAMEMORY_API_KEY": "dm_your_api_key",
+        "DELTAMEMORY_URL": "https://your-endpoint.deltamemory.com",
+        "DELTAMEMORY_COLLECTION": "cursor-memory"
+      }
+    }
+  }
+}
+```
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `DELTAMEMORY_API_KEY` | Yes | Your API key from [app.deltamemory.com](https://app.deltamemory.com) |
+| `DELTAMEMORY_URL` | Yes | Your endpoint URL from the dashboard |
+| `DELTAMEMORY_COLLECTION` | No | Default collection name (defaults to "default") |
+
+## Available Tools
+
+Once configured, your AI assistant has access to these memory tools:
+
+### Core Operations
+
+| Tool | Description |
+|------|-------------|
+| `deltamemory_ingest` | Store content with cognitive processing (extracts facts, concepts, profiles, events) |
+| `deltamemory_recall` | Search memories with hybrid cognitive search |
+| `deltamemory_store` | Store content without cognitive processing |
+| `deltamemory_get` | Get a specific memory by ID |
+| `deltamemory_delete` | Delete a memory by ID |
+
+### Memory Management
+
+| Tool | Description |
+|------|-------------|
+| `deltamemory_stats` | Get collection statistics |
+| `deltamemory_decay` | Apply salience decay to memories |
+| `deltamemory_consolidate` | Merge similar memories |
+| `deltamemory_reflect` | Generate insights from recent memories |
+| `deltamemory_graph` | Get knowledge graph |
+| `deltamemory_purge` | Delete all memories in a collection |
+| `deltamemory_health` | Check server health |
+
+## Usage Examples
+
+Once configured, your AI assistant can use memory naturally:
+
+**Storing memories:**
+- "Remember that I prefer TypeScript over JavaScript"
+- "Save that my project deadline is March 15th"
+- "Note that I'm working on a React Native app"
+
+**Recalling memories:**
+- "What do you know about my preferences?"
+- "What have we discussed about my project?"
+- "What's my deadline?"
+
+**Managing memories:**
+- "Show me memory statistics"
+- "Generate insights from our recent conversations"
+
+## How It Works
+
+1. **Ingest**: When you share information, the MCP server processes it through DeltaMemory's cognitive pipeline, extracting facts, concepts, user profiles, and events.
+
+2. **Recall**: When you ask questions, the server performs hybrid search combining semantic similarity, recency, and salience scoring to find relevant memories.
+
+3. **Context**: The server returns pre-formatted context that helps the AI assistant provide personalized, contextual responses.
+
+## Tips
+
+- Use separate collections for different contexts (e.g., `work-memory`, `personal-memory`)
+- The AI will automatically decide when to store and recall memories based on conversation context
+- Memories persist across sessions, giving your AI assistant long-term memory

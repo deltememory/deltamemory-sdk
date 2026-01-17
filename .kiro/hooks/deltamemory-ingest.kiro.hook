@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "DeltaMemory Ingest",
+  "description": "Prompts the agent to ingest important context, decisions, and changes into DeltaMemory when work is completed",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "echo \"Ready to ingest memories\""
+  }
+}

@@ -1,5 +1,6 @@
 {
   "vercel-ai-sdk": "Vercel AI SDK",
   "langchain": "LangChain",
-  "openai": "OpenAI"
+  "openai": "OpenAI",
+  "mcp": "MCP Server"
 }
