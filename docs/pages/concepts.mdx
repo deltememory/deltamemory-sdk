@@ -1,0 +1,410 @@
+# Core Concepts
+
+Understanding the key concepts behind DeltaMemory.
+
+## What is DeltaMemory?
+
+DeltaMemory is a cognitive memory system for AI applications that provides intelligent memory management with automatic fact extraction, user profiling, event tracking, and hybrid search capabilities.
+
+Unlike traditional vector databases that only store embeddings, DeltaMemory processes content to extract structured knowledge and provides context-aware recall.
+
+## Cognitive Processing
+
+### What Happens During Ingest?
+
+When you call `ingest()`, DeltaMemory performs cognitive processing:
+
+1. **Embedding Generation** - Creates vector embeddings for semantic search
+2. **Fact Extraction** - Identifies factual statements from content
+3. **Concept Identification** - Recognizes entities and topics
+4. **Profile Building** - Extracts structured user information
+5. **Event Detection** - Identifies timeline-worthy activities and plans
+
+This processing enables richer recall with structured data, not just raw text.
+
+### When to Use ingest() vs store()
+
+**Use `ingest()` when:**
+- Content contains user information or preferences
+- You want automatic fact extraction
+- Building user profiles over time
+- Tracking events and activities
+- Need knowledge graph relationships
+
+**Use `store()` when:**
+- Just need fast storage without processing
+- Content is already structured
+- Saving system logs or metadata
+- Performance is critical
+- Cost optimization is priority
+
+```typescript
+// Full cognitive processing
+await db.ingest('User prefers TypeScript and works at Acme Corp');
+// → Extracts profile facts, concepts, relationships
+
+// Fast storage only
+await db.store('System log: API call completed in 150ms');
+// → Just stores with embedding, no extraction
+```
+
+## Memory Types
+
+DeltaMemory organizes memories into types:
+
+### Conversation
+Raw conversational content from user interactions.
+
+**When to use:** Chat messages, dialogue, user input
+
+```typescript
+await db.ingest('I love hiking in the mountains', {
+  memoryType: 'Conversation'
+});
+```
+
+### Fact
+Extracted or explicitly stored factual statements.
+
+**When to use:** Verified information, extracted facts, knowledge
+
+```typescript
+await db.store('User email: user@example.com', {
+  memoryType: 'Fact'
+});
+```
+
+### Insight
+Generated reflections and patterns from memory analysis.
+
+**When to use:** AI-generated summaries, patterns, observations
+
+```typescript
+const { reflection } = await db.reflect(20);
+await db.store(reflection, { memoryType: 'Insight' });
+```
+
+### Summary
+Consolidated information from multiple memories.
+
+**When to use:** Merged content, consolidated knowledge
+
+```typescript
+await db.consolidate(0.85);
+// Creates Summary type memories from similar content
+```
+
+## Hybrid Search
+
+Recall combines three signals to find relevant memories:
+
+### Similarity (Semantic)
+Vector similarity between query and memory embeddings.
+
+**High weight when:** Content meaning matters most
+
+### Recency (Temporal)
+How recently the memory was created.
+
+**High weight when:** Recent context is most relevant
+
+### Salience (Importance)
+Importance score that decays over time.
+
+**High weight when:** Important facts should persist
+
+### Tuning Weights
+
+```typescript
+// For recent conversations
+await db.recall('query', {
+  weights: {
+    similarity: 0.3,
+    recency: 0.5,    // Prioritize recent
+    salience: 0.2
+  }
+});
+
+// For important facts
+await db.recall('query', {
+  weights: {
+    similarity: 0.4,
+    recency: 0.1,
+    salience: 0.5    // Prioritize important
+  }
+});
+
+// For semantic search
+await db.recall('query', {
+  weights: {
+    similarity: 0.8,  // Prioritize meaning
+    recency: 0.1,
+    salience: 0.1
+  }
+});
+```
+
+## User Profiles
+
+Structured facts about users organized by topic.
+
+### Profile Topics
+
+- `basic_info` - Name, age, location, contact
+- `work` - Job title, company, skills, experience
+- `interests` - Hobbies, preferences, likes/dislikes
+- `relationships` - Family, friends, connections
+- `health` - Medical info, fitness, wellness
+- `education` - Schools, degrees, learning
+- `goals` - Aspirations, plans, objectives
+- `personality` - Traits, characteristics, style
+
+### How Profiles Work
+
+```typescript
+// Ingest content with profile information
+await db.ingest('I work as a Senior Engineer at Acme Corp');
+
+// Recall returns structured profiles
+const result = await db.recall('user job');
+console.log(result.profiles);
+// [
+//   {
+//     topic: 'work',
+//     sub_topic: 'title',
+//     content: 'Senior Engineer',
+//     confidence: 0.95
+//   },
+//   {
+//     topic: 'work',
+//     sub_topic: 'company',
+//     content: 'Acme Corp',
+//     confidence: 0.95
+//   }
+// ]
+```
+
+### Using Profile Context
+
+```typescript
+const result = await db.recall('user preferences');
+
+// Pre-formatted for LLM
+console.log(result.context);
+// # User Memory
+// ## User Profile
+// - work::title: Senior Engineer
+// - work::company: Acme Corp
+// - interests::language: TypeScript
+```
+
+## Event Timeline
+
+Track user activities, plans, and milestones with timestamps.
+
+### Event Types
+
+- `activity` - Things the user did
+- `plan` - Future intentions or goals
+- `milestone` - Significant achievements
+- `preference` - Stated likes/dislikes
+- `social` - Interactions with others
+
+### How Events Work
+
+```typescript
+// Ingest content with temporal information
+await db.ingest('I started learning TypeScript last week', {
+  datetime: '2024-01-15T10:00:00Z'
+});
+
+// Recall returns timeline events
+const result = await db.recall('learning');
+console.log(result.events);
+// [
+//   {
+//     gist: 'started learning TypeScript',
+//     event_type: 'activity',
+//     mentioned_at: 1705315200000,
+//     event_at: 1704700800000,  // Last week
+//     tags: ['learning', 'typescript']
+//   }
+// ]
+```
+
+## Knowledge Graph
+
+Relationships between concepts extracted from memories.
+
+### Graph Structure
+
+- **Nodes**: Concepts, facts, entities
+- **Edges**: Relationships between nodes
+- **Weights**: Relationship strength
+
+### Using the Graph
+
+```typescript
+const graph = await db.graph();
+
+// Visualize concepts
+graph.nodes.forEach(node => {
+  console.log(`${node.name} (${node.node_type})`);
+});
+
+// Explore relationships
+graph.edges.forEach(edge => {
+  console.log(`${edge.from} → ${edge.to} [${edge.relation_type}]`);
+});
+```
+
+### Multi-Hop Reasoning
+
+Recall automatically traverses the graph to find related concepts:
+
+```typescript
+const result = await db.recall('programming');
+// Returns memories about programming AND related concepts
+// like TypeScript, JavaScript, coding, development
+```
+
+## Collections
+
+Isolated namespaces for organizing memories.
+
+### Collection Strategies
+
+**Per-User Collections:**
+```typescript
+const db = new DeltaMemory({
+  defaultCollection: `user-${userId}`
+});
+```
+
+**Per-Feature Collections:**
+```typescript
+await db.ingest(content, { collection: 'chat' });
+await db.ingest(content, { collection: 'documents' });
+```
+
+**Per-Tenant Collections:**
+```typescript
+const db = new DeltaMemory({
+  defaultCollection: `tenant-${tenantId}`
+});
+```
+
+### Collection Isolation
+
+Collections are completely isolated:
+- Separate memories
+- Separate profiles
+- Separate events
+- Separate graphs
+- Separate statistics
+
+## Memory Maintenance
+
+### Salience Decay
+
+Reduce importance of older memories over time:
+
+```typescript
+// Apply 10% decay
+await db.decay(0.1);
+```
+
+**When to use:**
+- Periodic maintenance (daily/weekly)
+- Prevent old memories from dominating recall
+- Natural forgetting behavior
+
+### Memory Consolidation
+
+Merge similar memories to reduce redundancy:
+
+```typescript
+// Merge memories with 85% similarity
+await db.consolidate(0.85);
+```
+
+**When to use:**
+- Periodic maintenance (weekly/monthly)
+- Reduce storage costs
+- Improve recall quality
+- Remove duplicates
+
+### Reflection
+
+Generate insights from recent memories:
+
+```typescript
+// Analyze last 20 memories
+const { reflection } = await db.reflect(20);
+console.log(reflection);
+// "User shows strong interest in TypeScript and functional programming..."
+```
+
+**When to use:**
+- Periodic insight generation
+- Understanding user patterns
+- Creating summaries
+- Building meta-knowledge
+
+## Pre-Formatted Context
+
+DeltaMemory provides ready-to-use context strings for LLMs:
+
+```typescript
+const result = await db.recall('user preferences');
+
+// Use directly in LLM prompt
+const prompt = `
+${result.context}
+
+User: What programming language should I use?
+Assistant: Based on your profile, I recommend...
+`;
+```
+
+The context includes:
+- User profile facts
+- Timeline events
+- Relevant memories
+- Extracted concepts
+
+All formatted in a clean, LLM-friendly structure.
+
+## Best Practices
+
+### 1. Choose the Right Operation
+- Use `ingest()` for user content
+- Use `store()` for system data
+- Use `recall()` with tuned weights
+
+### 2. Organize with Collections
+- Isolate user data
+- Separate features
+- Enable multi-tenancy
+
+### 3. Maintain Regularly
+- Apply decay periodically
+- Consolidate similar memories
+- Generate insights
+
+### 4. Tune for Your Use Case
+- Adjust recall weights
+- Filter by memory type
+- Set appropriate limits
+
+### 5. Use Structured Data
+- Leverage profiles for user facts
+- Use events for timeline
+- Access graph for relationships
+
+## Next Steps
+
+- [TypeScript SDK Reference](/sdk/typescript)
+- [Python SDK Reference](/sdk/python)
+- [Production Deployment](/production)
+- [Troubleshooting](/troubleshooting)

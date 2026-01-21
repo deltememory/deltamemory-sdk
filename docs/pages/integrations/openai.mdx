@@ -1,0 +1,535 @@
+# OpenAI Integration
+
+Use DeltaMemory with OpenAI's Chat Completions API and Assistants API.
+
+## Chat Completions API
+
+### Basic Integration
+
+```typescript
+import OpenAI from 'openai';
+import { DeltaMemory } from 'deltamemory';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,
+  defaultCollection: 'openai-chat'
+});
+
+async function chat(userId: string, message: string) {
+  // Recall relevant context
+  const memory = await db.recall(message, { 
+    collection: `user-${userId}`,
+    limit: 5 
+  });
+  
+  // Build messages with memory context
+  const messages = [
+    {
+      role: 'system',
+      content: `You are a helpful assistant with memory of past conversations.
+
+${memory.context}`
+    },
+    {
+      role: 'user',
+      content: message
+    }
+  ];
+  
+  // Generate response
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages
+  });
+  
+  const response = completion.choices[0].message.content;
+  
+  // Store conversation
+  await db.ingest(
+    `User: ${message}\nAssistant: ${response}`,
+    { 
+      collection: `user-${userId}`,
+      speaker: 'user'
+    }
+  );
+  
+  return response;
+}
+```
+
+### With Streaming
+
+```typescript
+async function chatStream(userId: string, message: string) {
+  const memory = await db.recall(message, { 
+    collection: `user-${userId}`,
+    limit: 5 
+  });
+  
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [
+      {
+        role: 'system',
+        content: `You are a helpful assistant.\n\n${memory.context}`
+      },
+      { role: 'user', content: message }
+    ],
+    stream: true
+  });
+  
+  let fullResponse = '';
+  
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || '';
+    fullResponse += content;
+    process.stdout.write(content);
+  }
+  
+  // Store after streaming completes
+  await db.ingest(
+    `User: ${message}\nAssistant: ${fullResponse}`,
+    { collection: `user-${userId}` }
+  );
+  
+  return fullResponse;
+}
+```
+
+## Function Calling
+
+Use DeltaMemory as a function that OpenAI can call:
+
+```typescript
+const tools = [
+  {
+    type: 'function',
+    function: {
+      name: 'recall_memory',
+      description: 'Search past conversations and user context',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'What to search for in memory'
+          },
+          limit: {
+            type: 'number',
+            description: 'Maximum number of results',
+            default: 5
+          }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'store_memory',
+      description: 'Store important information for future reference',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description: 'Information to remember'
+          },
+          importance: {
+            type: 'string',
+            enum: ['low', 'medium', 'high'],
+            description: 'Importance level'
+          }
+        },
+        required: ['content']
+      }
+    }
+  }
+];
+
+async function chatWithTools(userId: string, message: string) {
+  const messages = [
+    { role: 'system', content: 'You are a helpful assistant with memory.' },
+    { role: 'user', content: message }
+  ];
+  
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages,
+    tools,
+    tool_choice: 'auto'
+  });
+  
+  const responseMessage = response.choices[0].message;
+  
+  // Handle tool calls
+  if (responseMessage.tool_calls) {
+    for (const toolCall of responseMessage.tool_calls) {
+      const args = JSON.parse(toolCall.function.arguments);
+      
+      if (toolCall.function.name === 'recall_memory') {
+        const result = await db.recall(args.query, {
+          collection: `user-${userId}`,
+          limit: args.limit || 5
+        });
+        
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            memories: result.results.map(r => r.memory.content),
+            profiles: result.profiles,
+            events: result.events
+          })
+        });
+      }
+      
+      if (toolCall.function.name === 'store_memory') {
+        await db.ingest(args.content, {
+          collection: `user-${userId}`,
+          metadata: { importance: args.importance || 'medium' }
+        });
+        
+        messages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({ success: true })
+        });
+      }
+    }
+    
+    // Get final response after tool calls
+    const finalResponse = await openai.chat.completions.create({
+      model: 'gpt-4',
+      messages
+    });
+    
+    return finalResponse.choices[0].message.content;
+  }
+  
+  return responseMessage.content;
+}
+```
+
+## Assistants API
+
+### Create Assistant with Memory
+
+```typescript
+import OpenAI from 'openai';
+import { DeltaMemory } from 'deltamemory';
+
+const openai = new OpenAI();
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+// Create assistant
+const assistant = await openai.beta.assistants.create({
+  name: 'Memory Assistant',
+  instructions: 'You are a helpful assistant with long-term memory.',
+  model: 'gpt-4',
+  tools: [
+    {
+      type: 'function',
+      function: {
+        name: 'recall_memory',
+        description: 'Search past conversations',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' }
+          },
+          required: ['query']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'store_memory',
+        description: 'Store information',
+        parameters: {
+          type: 'object',
+          properties: {
+            content: { type: 'string' }
+          },
+          required: ['content']
+        }
+      }
+    }
+  ]
+});
+
+// Create thread
+const thread = await openai.beta.threads.create();
+
+// Send message
+await openai.beta.threads.messages.create(thread.id, {
+  role: 'user',
+  content: 'I prefer TypeScript over JavaScript'
+});
+
+// Run assistant
+const run = await openai.beta.threads.runs.create(thread.id, {
+  assistant_id: assistant.id
+});
+
+// Handle tool calls
+async function handleRun(threadId: string, runId: string, userId: string) {
+  let runStatus = await openai.beta.threads.runs.retrieve(threadId, runId);
+  
+  while (runStatus.status !== 'completed') {
+    if (runStatus.status === 'requires_action') {
+      const toolCalls = runStatus.required_action.submit_tool_outputs.tool_calls;
+      const toolOutputs = [];
+      
+      for (const toolCall of toolCalls) {
+        const args = JSON.parse(toolCall.function.arguments);
+        
+        if (toolCall.function.name === 'recall_memory') {
+          const result = await db.recall(args.query, {
+            collection: `user-${userId}`
+          });
+          toolOutputs.push({
+            tool_call_id: toolCall.id,
+            output: JSON.stringify(result)
+          });
+        }
+        
+        if (toolCall.function.name === 'store_memory') {
+          await db.ingest(args.content, {
+            collection: `user-${userId}`
+          });
+          toolOutputs.push({
+            tool_call_id: toolCall.id,
+            output: JSON.stringify({ success: true })
+          });
+        }
+      }
+      
+      await openai.beta.threads.runs.submitToolOutputs(threadId, runId, {
+        tool_outputs: toolOutputs
+      });
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    runStatus = await openai.beta.threads.runs.retrieve(threadId, runId);
+  }
+  
+  return runStatus;
+}
+
+await handleRun(thread.id, run.id, 'user-123');
+
+// Get messages
+const messages = await openai.beta.threads.messages.list(thread.id);
+console.log(messages.data[0].content);
+```
+
+## Best Practices
+
+### 1. Use Memory Context in System Prompt
+
+```typescript
+const memory = await db.recall(userMessage);
+
+const systemPrompt = `You are a helpful assistant.
+
+${memory.context}
+
+Use the above context to provide personalized responses.`;
+```
+
+### 2. Store Conversations Asynchronously
+
+```typescript
+// Don't block response on storage
+const response = await generateResponse(message);
+
+// Store in background
+db.ingest(`User: ${message}\nAssistant: ${response}`)
+  .catch(console.error);
+
+return response;
+```
+
+### 3. Use Profiles for Personalization
+
+```typescript
+const memory = await db.recall(message);
+
+const systemPrompt = `You are a helpful assistant.
+
+User Profile:
+${memory.profiles?.map(p => `- ${p.topic}::${p.sub_topic}: ${p.content}`).join('\n')}
+
+Tailor your responses to the user's background and preferences.`;
+```
+
+### 4. Implement Rate Limiting
+
+```typescript
+import rateLimit from 'express-rate-limit';
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20, // 20 requests per minute
+  message: 'Too many requests'
+});
+
+app.post('/chat', limiter, async (req, res) => {
+  const response = await chat(req.user.id, req.body.message);
+  res.json({ response });
+});
+```
+
+### 5. Handle Errors Gracefully
+
+```typescript
+async function chat(userId: string, message: string) {
+  try {
+    const memory = await db.recall(message, {
+      collection: `user-${userId}`
+    });
+    
+    // Use memory in prompt...
+  } catch (error) {
+    console.error('Memory recall failed:', error);
+    // Continue without memory context
+  }
+  
+  // Generate response...
+}
+```
+
+## Example: Personal Assistant
+
+```typescript
+import OpenAI from 'openai';
+import { DeltaMemory } from 'deltamemory';
+
+const openai = new OpenAI();
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+async function personalAssistant(userId: string, message: string) {
+  // Recall relevant context
+  const memory = await db.recall(message, {
+    collection: `user-${userId}`,
+    limit: 10
+  });
+  
+  // Build context-aware prompt
+  const systemPrompt = `You are a personal assistant with memory.
+
+${memory.context}
+
+Use this context to provide personalized, contextual responses.`;
+  
+  // Generate response
+  const completion = await openai.chat.completions.create({
+    model: 'gpt-4',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: message }
+    ],
+    temperature: 0.7
+  });
+  
+  const response = completion.choices[0].message.content;
+  
+  // Store conversation with metadata
+  await db.ingest(
+    `User: ${message}\nAssistant: ${response}`,
+    {
+      collection: `user-${userId}`,
+      datetime: new Date().toISOString(),
+      speaker: 'user',
+      metadata: {
+        model: 'gpt-4',
+        tokens: completion.usage.total_tokens
+      }
+    }
+  );
+  
+  return response;
+}
+
+// Usage
+const response = await personalAssistant('user-123', 'What are my preferences?');
+console.log(response);
+```
+
+## Python Example
+
+```python
+import os
+import asyncio
+from openai import AsyncOpenAI
+from deltamemory import DeltaMemory
+
+openai = AsyncOpenAI(api_key=os.environ.get('OPENAI_API_KEY'))
+db = DeltaMemory(
+    api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+    base_url=os.environ.get('DELTAMEMORY_URL')
+)
+
+async def chat(user_id: str, message: str) -> str:
+    async with db:
+        # Recall context
+        memory = await db.recall(
+            message,
+            collection=f'user-{user_id}',
+            limit=5
+        )
+        
+        # Generate response
+        completion = await openai.chat.completions.create(
+            model='gpt-4',
+            messages=[
+                {
+                    'role': 'system',
+                    'content': f'You are a helpful assistant.\n\n{memory.context}'
+                },
+                {'role': 'user', 'content': message}
+            ]
+        )
+        
+        response = completion.choices[0].message.content
+        
+        # Store conversation
+        await db.ingest(
+            f'User: {message}\nAssistant: {response}',
+            collection=f'user-{user_id}'
+        )
+        
+        return response
+
+# Usage
+response = asyncio.run(chat('user-123', 'What do you know about me?'))
+print(response)
+```
+
+## Resources
+
+- [OpenAI API Documentation](https://platform.openai.com/docs)
+- [OpenAI Function Calling](https://platform.openai.com/docs/guides/function-calling)
+- [OpenAI Assistants API](https://platform.openai.com/docs/assistants/overview)
+- [DeltaMemory TypeScript SDK](/sdk/typescript)
+- [DeltaMemory Python SDK](/sdk/python)
+
+## Next Steps
+
+- [Vercel AI SDK Integration](/integrations/vercel-ai-sdk) - Higher-level abstraction
+- [Production Guide](/production) - Deploy to production
+- [Troubleshooting](/troubleshooting) - Common issues

@@ -162,7 +162,7 @@ Get your API key and endpoint from [app.deltamemory.com](https://app.deltamemory
 
 ```bash
 export DELTAMEMORY_API_KEY=dm_your_api_key_here
-export DELTAMEMORY_URL=https://your-endpoint.deltamemory.com
+export DELTAMEMORY_URL=https://api-us-east-1.deltamemory.com
 ```
 
 Use in your application:
@@ -187,9 +187,33 @@ const db = new CognitiveDB({ ... });
 
 ## Documentation
 
-- [TypeScript SDK](./typescript/README.md)
-- [Python SDK](./python/README.md)
-- [AI SDK Integration](./ai-sdk/README.md)
+- **[Quick Start](/quickstart)** - Get started in 5 minutes
+- **[Core Concepts](/concepts)** - Understand how DeltaMemory works
+- **[TypeScript SDK](./typescript/README.md)** - Full TypeScript API reference
+- **[Python SDK](./python/README.md)** - Full Python API reference
+- **[AI SDK Integration](./ai-sdk/README.md)** - Vercel AI SDK tools
+- **[MCP Integration](/integrations/mcp)** - Claude Desktop, Cline & Cursor
+- **[Production Guide](/production)** - Deploy to production
+- **[Troubleshooting](/troubleshooting)** - Common issues & solutions
+- **[SDK Comparison](/sdk-comparison)** - Feature matrix
+- **[Changelog](./CHANGELOG.md)** - Version history
+
+## Resources
+
+- **Website:** https://deltamemory.com
+- **Documentation:** https://docs.deltamemory.com
+- **Dashboard:** https://app.deltamemory.com
+- **Status:** https://status.deltamemory.com
+- **Support:** support@deltamemory.com
+
+## Examples
+
+Check out the [examples](./examples) directory for complete applications:
+
+- **[Learning Tutor](./examples/learning-tutor)** - Personalized learning assistant
+- **[Legal Assistant](./examples/legal-assistant)** - Legal research with memory
+- **[Life Coach](./examples/life-coach)** - Personal coaching chatbot
+- **[Audio Memory](./examples/native-audio-deltamemory)** - Voice-based memory
 
 ## License
 

@@ -1,0 +1,579 @@
+# Production Deployment Guide
+
+Best practices for deploying DeltaMemory in production environments.
+
+## Prerequisites
+
+Before deploying to production:
+
+- [ ] API key from [app.deltamemory.com](https://app.deltamemory.com)
+- [ ] Assigned endpoint URL
+- [ ] Environment variable management solution
+- [ ] Error monitoring setup
+- [ ] Logging infrastructure
+
+## Environment Configuration
+
+### Environment Variables
+
+Store credentials securely:
+
+```bash
+# Required
+DELTAMEMORY_API_KEY=dm_your_api_key_here
+DELTAMEMORY_URL=https://api-us-east-1.deltamemory.com
+
+# Optional
+DELTAMEMORY_TIMEOUT=30000
+DELTAMEMORY_DEFAULT_COLLECTION=production
+```
+
+### Secrets Management
+
+**AWS Secrets Manager:**
+```typescript
+import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
+
+async function getDeltaMemoryConfig() {
+  const client = new SecretsManagerClient({ region: 'us-east-1' });
+  const response = await client.send(
+    new GetSecretValueCommand({ SecretId: 'deltamemory/prod' })
+  );
+  return JSON.parse(response.SecretString);
+}
+```
+
+**Google Secret Manager:**
+```python
+from google.cloud import secretmanager
+
+def get_deltamemory_config():
+    client = secretmanager.SecretManagerServiceClient()
+    name = "projects/PROJECT_ID/secrets/deltamemory-prod/versions/latest"
+    response = client.access_secret_version(request={"name": name})
+    return response.payload.data.decode('UTF-8')
+```
+
+**HashiCorp Vault:**
+```typescript
+import vault from 'node-vault';
+
+const client = vault({ endpoint: 'https://vault.example.com' });
+const { data } = await client.read('secret/data/deltamemory');
+```
+
+## Error Handling
+
+### Implement Retry Logic
+
+```typescript
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries = 3,
+  backoff = 1000
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      
+      // Exponential backoff
+      await new Promise(resolve => 
+        setTimeout(resolve, backoff * Math.pow(2, i))
+      );
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+// Usage
+const result = await withRetry(() => db.ingest(content));
+```
+
+### Graceful Degradation
+
+```typescript
+async function recallWithFallback(query: string) {
+  try {
+    return await db.recall(query);
+  } catch (error) {
+    console.error('DeltaMemory recall failed:', error);
+    // Return empty results instead of crashing
+    return {
+      results: [],
+      concepts: [],
+      profiles: [],
+      events: [],
+      context: ''
+    };
+  }
+}
+```
+
+### Circuit Breaker Pattern
+
+```typescript
+class CircuitBreaker {
+  private failures = 0;
+  private lastFailure = 0;
+  private readonly threshold = 5;
+  private readonly timeout = 60000; // 1 minute
+
+  async execute<T>(fn: () => Promise<T>): Promise<T> {
+    if (this.isOpen()) {
+      throw new Error('Circuit breaker is open');
+    }
+
+    try {
+      const result = await fn();
+      this.onSuccess();
+      return result;
+    } catch (error) {
+      this.onFailure();
+      throw error;
+    }
+  }
+
+  private isOpen(): boolean {
+    if (this.failures >= this.threshold) {
+      const elapsed = Date.now() - this.lastFailure;
+      return elapsed < this.timeout;
+    }
+    return false;
+  }
+
+  private onSuccess() {
+    this.failures = 0;
+  }
+
+  private onFailure() {
+    this.failures++;
+    this.lastFailure = Date.now();
+  }
+}
+
+const breaker = new CircuitBreaker();
+const result = await breaker.execute(() => db.ingest(content));
+```
+
+## Monitoring & Observability
+
+### Logging
+
+```typescript
+import { DeltaMemory } from 'deltamemory';
+
+class MonitoredDeltaMemory extends DeltaMemory {
+  async ingest(content: string, options?: any) {
+    const start = Date.now();
+    try {
+      const result = await super.ingest(content, options);
+      console.log({
+        operation: 'ingest',
+        duration: Date.now() - start,
+        success: true,
+        memoryIds: result.memory_ids.length
+      });
+      return result;
+    } catch (error) {
+      console.error({
+        operation: 'ingest',
+        duration: Date.now() - start,
+        success: false,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+}
+```
+
+### Metrics
+
+Track these key metrics:
+
+```typescript
+// Operation latency
+const start = Date.now();
+await db.ingest(content);
+metrics.histogram('deltamemory.ingest.duration', Date.now() - start);
+
+// Error rate
+try {
+  await db.recall(query);
+  metrics.increment('deltamemory.recall.success');
+} catch (error) {
+  metrics.increment('deltamemory.recall.error');
+}
+
+// Collection size
+const stats = await db.stats();
+metrics.gauge('deltamemory.memory_count', stats.memory_count);
+metrics.gauge('deltamemory.profile_count', stats.profile_count);
+```
+
+### Health Checks
+
+```typescript
+// Kubernetes liveness probe
+app.get('/health', async (req, res) => {
+  try {
+    const health = await db.health();
+    res.status(health.healthy ? 200 : 503).json(health);
+  } catch (error) {
+    res.status(503).json({ healthy: false, error: error.message });
+  }
+});
+```
+
+## Performance Optimization
+
+### Connection Pooling
+
+```typescript
+// Reuse client instance across requests
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+// Don't create new client per request
+app.post('/chat', async (req, res) => {
+  // ❌ Bad - creates new connection
+  const db = new DeltaMemory({ ... });
+  
+  // ✅ Good - reuses connection
+  await db.ingest(req.body.message);
+});
+```
+
+### Batch Operations
+
+```typescript
+// ❌ Bad - multiple round trips
+for (const message of messages) {
+  await db.ingest(message);
+}
+
+// ✅ Good - single operation
+await db.ingest(messages.join('\n\n'));
+```
+
+### Background Processing
+
+```typescript
+// Don't block user response
+app.post('/chat', async (req, res) => {
+  const { message } = req.body;
+  
+  // Generate response immediately
+  const response = await generateResponse(message);
+  
+  // Ingest in background
+  db.ingest(message).catch(error => {
+    console.error('Background ingest failed:', error);
+  });
+  
+  res.json({ response });
+});
+```
+
+### Caching
+
+```typescript
+import { LRUCache } from 'lru-cache';
+
+const cache = new LRUCache<string, RecallResponse>({
+  max: 500,
+  ttl: 1000 * 60 * 5 // 5 minutes
+});
+
+async function cachedRecall(query: string) {
+  const cached = cache.get(query);
+  if (cached) return cached;
+  
+  const result = await db.recall(query);
+  cache.set(query, result);
+  return result;
+}
+```
+
+## Security Best Practices
+
+### API Key Rotation
+
+```typescript
+// Support multiple API keys during rotation
+const primaryKey = process.env.DELTAMEMORY_API_KEY;
+const secondaryKey = process.env.DELTAMEMORY_API_KEY_SECONDARY;
+
+async function ingestWithFallback(content: string) {
+  try {
+    const db = new DeltaMemory({ apiKey: primaryKey });
+    return await db.ingest(content);
+  } catch (error) {
+    if (error.code === 401 && secondaryKey) {
+      const db = new DeltaMemory({ apiKey: secondaryKey });
+      return await db.ingest(content);
+    }
+    throw error;
+  }
+}
+```
+
+### Input Validation
+
+```typescript
+function validateContent(content: string): void {
+  if (!content || typeof content !== 'string') {
+    throw new Error('Content must be a non-empty string');
+  }
+  if (content.length > 100000) {
+    throw new Error('Content exceeds maximum length');
+  }
+}
+
+await db.ingest(validateContent(userInput));
+```
+
+### Rate Limiting
+
+```typescript
+import rateLimit from 'express-rate-limit';
+
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute
+  message: 'Too many requests'
+});
+
+app.use('/api/memory', limiter);
+```
+
+## Collection Management
+
+### Per-User Collections
+
+```typescript
+// Isolate user data
+function getUserDb(userId: string) {
+  return new DeltaMemory({
+    apiKey: process.env.DELTAMEMORY_API_KEY,
+    baseUrl: process.env.DELTAMEMORY_URL,
+    defaultCollection: `user-${userId}`
+  });
+}
+```
+
+### Periodic Maintenance
+
+```typescript
+// Run daily maintenance
+import cron from 'node-cron';
+
+cron.schedule('0 2 * * *', async () => {
+  console.log('Running memory maintenance...');
+  
+  // Apply decay to reduce old memory importance
+  await db.decay(0.05);
+  
+  // Consolidate similar memories
+  await db.consolidate(0.85);
+  
+  // Generate insights
+  const { reflection } = await db.reflect(50);
+  if (reflection) {
+    await db.store(reflection, { memoryType: 'Insight' });
+  }
+  
+  console.log('Maintenance complete');
+});
+```
+
+## Deployment Platforms
+
+### Vercel
+
+```typescript
+// api/chat.ts
+import { DeltaMemory } from 'deltamemory';
+
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+export default async function handler(req, res) {
+  const { message } = req.body;
+  const result = await db.recall(message);
+  res.json(result);
+}
+```
+
+Environment variables in Vercel dashboard:
+- `DELTAMEMORY_API_KEY`
+- `DELTAMEMORY_URL`
+
+### AWS Lambda
+
+```typescript
+import { DeltaMemory } from 'deltamemory';
+
+// Initialize outside handler for connection reuse
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+export const handler = async (event) => {
+  const { message } = JSON.parse(event.body);
+  const result = await db.recall(message);
+  
+  return {
+    statusCode: 200,
+    body: JSON.stringify(result)
+  };
+};
+```
+
+### Docker
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --production
+
+COPY . .
+
+ENV NODE_ENV=production
+
+CMD ["node", "index.js"]
+```
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    environment:
+      - DELTAMEMORY_API_KEY=${DELTAMEMORY_API_KEY}
+      - DELTAMEMORY_URL=${DELTAMEMORY_URL}
+    ports:
+      - "3000:3000"
+```
+
+### Kubernetes
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: deltamemory-secret
+type: Opaque
+stringData:
+  api-key: dm_your_api_key_here
+  url: https://api-us-east-1.deltamemory.com
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+spec:
+  replicas: 3
+  template:
+    spec:
+      containers:
+      - name: app
+        image: your-app:latest
+        env:
+        - name: DELTAMEMORY_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: deltamemory-secret
+              key: api-key
+        - name: DELTAMEMORY_URL
+          valueFrom:
+            secretKeyRef:
+              name: deltamemory-secret
+              key: url
+```
+
+## Cost Optimization
+
+### Use store() When Appropriate
+
+```typescript
+// ❌ Expensive - full cognitive processing
+await db.ingest(logMessage);
+
+// ✅ Cheaper - no LLM processing
+await db.store(logMessage);
+```
+
+### Consolidate Regularly
+
+```typescript
+// Merge similar memories to reduce storage
+await db.consolidate(0.85);
+```
+
+### Apply Decay
+
+```typescript
+// Reduce importance of old memories
+await db.decay(0.1);
+```
+
+### Clean Up Old Collections
+
+```typescript
+// Delete inactive user collections
+const inactiveUsers = await getInactiveUsers();
+for (const userId of inactiveUsers) {
+  await db.purge(`user-${userId}`);
+}
+```
+
+## Production Checklist
+
+Before going live:
+
+- [ ] API keys stored in secrets manager
+- [ ] Environment variables configured
+- [ ] Error handling implemented
+- [ ] Retry logic in place
+- [ ] Logging configured
+- [ ] Metrics tracking setup
+- [ ] Health checks implemented
+- [ ] Rate limiting configured
+- [ ] Input validation added
+- [ ] Connection pooling verified
+- [ ] Background processing for non-critical operations
+- [ ] Monitoring alerts configured
+- [ ] Backup strategy defined
+- [ ] Incident response plan documented
+- [ ] Load testing completed
+- [ ] Security review passed
+
+## Monitoring Alerts
+
+Set up alerts for:
+
+- Error rate > 5%
+- P95 latency > 2 seconds
+- Memory count growth > 10% per day
+- API key expiration warnings
+- Service health check failures
+
+## Support
+
+For production issues:
+
+- Status page: https://status.deltamemory.com
+- Support: support@deltamemory.com
+- Documentation: https://docs.deltamemory.com

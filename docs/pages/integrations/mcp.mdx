@@ -1,6 +1,10 @@
-# MCP Server
+# MCP Integration
 
-Give AI assistants like Claude, Cursor, and other MCP-compatible clients persistent memory capabilities through the Model Context Protocol.
+Use DeltaMemory with Claude Desktop, Cline, Cursor, and other Model Context Protocol (MCP) clients.
+
+## What is MCP?
+
+The Model Context Protocol (MCP) is an open standard that enables AI assistants to securely access external tools and data sources. DeltaMemory provides an MCP server that exposes memory operations as tools.
 
 ## Installation
 
@@ -20,7 +24,9 @@ Add to your MCP client configuration:
 
 ### Claude Desktop
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -29,9 +35,29 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) o
       "command": "npx",
       "args": ["-y", "@deltamemory/mcp"],
       "env": {
-        "DELTAMEMORY_API_KEY": "dm_your_api_key",
-        "DELTAMEMORY_URL": "https://your-endpoint.deltamemory.com",
+        "DELTAMEMORY_API_KEY": "dm_your_api_key_here",
+        "DELTAMEMORY_URL": "https://api-us-east-1.deltamemory.com",
         "DELTAMEMORY_COLLECTION": "claude-memory"
+      }
+    }
+  }
+}
+```
+
+### Cline (VS Code Extension)
+
+Add to Cline MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "deltamemory": {
+      "command": "npx",
+      "args": ["-y", "@deltamemory/mcp"],
+      "env": {
+        "DELTAMEMORY_API_KEY": "dm_your_api_key_here",
+        "DELTAMEMORY_URL": "https://api-us-east-1.deltamemory.com",
+        "DELTAMEMORY_COLLECTION": "cline-memory"
       }
     }
   }
@@ -49,8 +75,8 @@ Add to your Cursor MCP settings:
       "command": "npx",
       "args": ["-y", "@deltamemory/mcp"],
       "env": {
-        "DELTAMEMORY_API_KEY": "dm_your_api_key",
-        "DELTAMEMORY_URL": "https://your-endpoint.deltamemory.com",
+        "DELTAMEMORY_API_KEY": "dm_your_api_key_here",
+        "DELTAMEMORY_URL": "https://api-us-east-1.deltamemory.com",
         "DELTAMEMORY_COLLECTION": "cursor-memory"
       }
     }
@@ -62,9 +88,9 @@ Add to your Cursor MCP settings:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `DELTAMEMORY_API_KEY` | Yes | Your API key from [app.deltamemory.com](https://app.deltamemory.com) |
-| `DELTAMEMORY_URL` | Yes | Your endpoint URL from the dashboard |
-| `DELTAMEMORY_COLLECTION` | No | Default collection name (defaults to "default") |
+| `DELTAMEMORY_API_KEY` | Yes | API key from [app.deltamemory.com](https://app.deltamemory.com) |
+| `DELTAMEMORY_URL` | Yes | Your endpoint URL (e.g., `https://api-us-east-1.deltamemory.com`) |
+| `DELTAMEMORY_COLLECTION` | No | Collection name for memory isolation (default: "default") |
 
 ## Available Tools
 
@@ -123,3 +149,152 @@ Once configured, your AI assistant can use memory naturally:
 - Use separate collections for different contexts (e.g., `work-memory`, `personal-memory`)
 - The AI will automatically decide when to store and recall memories based on conversation context
 - Memories persist across sessions, giving your AI assistant long-term memory
+
+
+## Troubleshooting
+
+### MCP Server Not Starting
+
+**Check logs:**
+
+**Claude Desktop:**
+- macOS: `~/Library/Logs/Claude/mcp*.log`
+- Windows: `%APPDATA%\Claude\logs\mcp*.log`
+
+**Common issues:**
+1. Node.js not installed or wrong version (need 18+)
+2. API key not set or invalid
+3. Network connectivity issues
+4. Invalid JSON in config file
+
+### Tools Not Appearing
+
+1. Restart Claude Desktop / Cline / Cursor
+2. Check config file syntax (valid JSON)
+3. Verify environment variables are set
+4. Check MCP server logs for errors
+
+### Memory Not Persisting
+
+1. Verify `DELTAMEMORY_COLLECTION` is consistent across sessions
+2. Check API key has write permissions
+3. Verify endpoint URL is correct
+4. Test connection: `curl -H "X-API-Key: $DELTAMEMORY_API_KEY" $DELTAMEMORY_URL/v1/health`
+
+## Multi-User Setup
+
+For multi-user scenarios, use different collections:
+
+```json
+{
+  "mcpServers": {
+    "deltamemory-alice": {
+      "command": "npx",
+      "args": ["-y", "@deltamemory/mcp"],
+      "env": {
+        "DELTAMEMORY_API_KEY": "dm_xxx",
+        "DELTAMEMORY_URL": "https://api-us-east-1.deltamemory.com",
+        "DELTAMEMORY_COLLECTION": "user-alice"
+      }
+    },
+    "deltamemory-bob": {
+      "command": "npx",
+      "args": ["-y", "@deltamemory/mcp"],
+      "env": {
+        "DELTAMEMORY_API_KEY": "dm_xxx",
+        "DELTAMEMORY_URL": "https://api-us-east-1.deltamemory.com",
+        "DELTAMEMORY_COLLECTION": "user-bob"
+      }
+    }
+  }
+}
+```
+
+## Best Practices
+
+### 1. Use Descriptive Collection Names
+
+```bash
+# ❌ Generic
+DELTAMEMORY_COLLECTION=memory1
+
+# ✅ Descriptive
+DELTAMEMORY_COLLECTION=alice-work
+DELTAMEMORY_COLLECTION=bob-personal
+```
+
+### 2. Separate Collections by Context
+
+```bash
+# Work-related memory
+DELTAMEMORY_COLLECTION=work-projects
+
+# Personal memory
+DELTAMEMORY_COLLECTION=personal
+```
+
+### 3. Use Specific Queries
+
+The AI will get better results with specific queries rather than vague ones.
+
+## Security Considerations
+
+### API Key Protection
+
+- Never commit API keys to version control
+- Use environment variables
+- Rotate keys periodically
+- Use separate keys for different environments
+
+### User Isolation
+
+- Use unique collection names per user
+- Don't share collections across users
+- Collections provide complete data isolation
+
+### Data Privacy
+
+- Memory is stored on DeltaMemory servers
+- Data is encrypted in transit (HTTPS)
+- Follow your organization's data policies
+- Consider data retention requirements
+
+## Advanced Configuration
+
+### Using Bun Instead of Node
+
+```json
+{
+  "command": "bun",
+  "args": ["x", "@deltamemory/mcp"]
+}
+```
+
+### Local Development
+
+```json
+{
+  "env": {
+    "DELTAMEMORY_API_KEY": "dm_xxx",
+    "DELTAMEMORY_URL": "http://localhost:6969",
+    "DELTAMEMORY_COLLECTION": "dev-testing"
+  }
+}
+```
+
+## Resources
+
+- [MCP Specification](https://modelcontextprotocol.io)
+- [Claude Desktop](https://claude.ai/desktop)
+- [Cline Extension](https://marketplace.visualstudio.com/items?itemName=cline)
+- [DeltaMemory Docs](https://docs.deltamemory.com)
+- [Troubleshooting Guide](/troubleshooting)
+
+## Support
+
+For MCP-specific issues:
+
+- Check MCP server logs
+- Verify configuration
+- Test with direct SDK first
+- Contact: support@deltamemory.com

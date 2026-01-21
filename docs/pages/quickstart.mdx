@@ -9,8 +9,8 @@ Get started with DeltaMemory in under 5 minutes.
 3. Create your first project
 
 After signing up, you'll receive:
-- Your unique API endpoint URL
-- Your first API key
+- Your unique API endpoint URL (e.g., `https://api-us-east-1.deltamemory.com`)
+- Your first API key (starts with `dm_`)
 
 ## 2. Install the SDK
 
@@ -20,24 +20,33 @@ import { Tabs, Tab } from 'nextra/components'
   <Tab>
 ```bash
 npm install deltamemory
-# or
-yarn add deltamemory
-# or
-pnpm add deltamemory
 ```
   </Tab>
   <Tab>
 ```bash
 pip install deltamemory
-# or
-poetry add deltamemory
-# or
-uv add deltamemory
 ```
   </Tab>
 </Tabs>
 
-## 3. Basic Usage
+## 3. Set Environment Variables
+
+<Tabs items={['TypeScript', 'Python']}>
+  <Tab>
+```bash
+export DELTAMEMORY_API_KEY=dm_your_api_key_here
+export DELTAMEMORY_URL=https://api-us-east-1.deltamemory.com
+```
+  </Tab>
+  <Tab>
+```bash
+export DELTAMEMORY_API_KEY=dm_your_api_key_here
+export DELTAMEMORY_URL=https://api-us-east-1.deltamemory.com
+```
+  </Tab>
+</Tabs>
+
+## 4. Hello World Example
 
 <Tabs items={['TypeScript', 'Python']}>
   <Tab>
@@ -45,93 +54,63 @@ uv add deltamemory
 import { DeltaMemory } from 'deltamemory';
 
 const db = new DeltaMemory({
-  apiKey: process.env.DELTAMEMORY_API_KEY,  // From dashboard
-  baseUrl: process.env.DELTAMEMORY_URL,     // Your assigned endpoint
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,
   defaultCollection: 'my-app'
 });
 
-// Ingest content with cognitive processing
-const result = await db.ingest(
-  'My name is Sarah. I work as a product manager at TechCorp and prefer async communication.',
-  {
-    datetime: new Date().toISOString(),
-    speaker: 'user'
-  }
-);
+async function main() {
+  // Ingest with cognitive processing
+  await db.ingest('I love TypeScript and building AI applications');
+  
+  // Recall with structured context
+  const result = await db.recall('What do I love?');
+  
+  console.log('Memories:', result.results);
+  console.log('Profiles:', result.profiles);
+  console.log('Context:', result.context);
+}
 
-console.log('Extracted facts:', result.facts);
-// [
-//   { fact: 'User name is Sarah', confidence: 0.95 },
-//   { fact: 'Works as product manager', confidence: 0.92 },
-//   { fact: 'Works at TechCorp', confidence: 0.90 },
-//   { fact: 'Prefers async communication', confidence: 0.88 }
-// ]
-
-// Recall with structured context
-const recall = await db.recall('What do I know about the user?');
-
-console.log('Profiles:', recall.profiles);
-// [
-//   { topic: 'basic_info', sub_topic: 'name', content: 'Sarah' },
-//   { topic: 'work', sub_topic: 'title', content: 'product manager' },
-//   { topic: 'work', sub_topic: 'company', content: 'TechCorp' },
-//   { topic: 'preference', sub_topic: 'communication', content: 'async' }
-// ]
-
-// Use pre-formatted context for LLM
-console.log('Context for LLM:', recall.context);
+main();
 ```
   </Tab>
   <Tab>
 ```python
 import asyncio
 import os
-from deltamemory import DeltaMemory, IngestOptions
-from datetime import datetime
+from deltamemory import DeltaMemory
 
 async def main():
     db = DeltaMemory(
-        api_key=os.environ.get('DELTAMEMORY_API_KEY'),  # From dashboard
-        base_url=os.environ.get('DELTAMEMORY_URL'),     # Your assigned endpoint
+        api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+        base_url=os.environ.get('DELTAMEMORY_URL'),
         default_collection='my-app'
     )
-
+    
     async with db:
-        # Ingest content with cognitive processing
-        result = await db.ingest(
-            'My name is Sarah. I work as a product manager at TechCorp and prefer async communication.',
-            IngestOptions(
-                datetime=datetime.now().isoformat(),
-                speaker='user'
-            )
-        )
-
-        print('Extracted facts:', result.facts)
-        # [
-        #   ExtractedFact(fact='User name is Sarah', confidence=0.95),
-        #   ExtractedFact(fact='Works as product manager', confidence=0.92),
-        #   ...
-        # ]
-
+        # Ingest with cognitive processing
+        await db.ingest('I love Python and building AI applications')
+        
         # Recall with structured context
-        recall = await db.recall('What do I know about the user?')
-
-        print('Profiles:', recall.profiles)
-        # [
-        #   UserProfile(topic='basic_info', sub_topic='name', content='Sarah'),
-        #   UserProfile(topic='work', sub_topic='title', content='product manager'),
-        #   ...
-        # ]
-
-        # Use pre-formatted context for LLM
-        print('Context for LLM:', recall.context)
+        result = await db.recall('What do I love?')
+        
+        print('Memories:', result.results)
+        print('Profiles:', result.profiles)
+        print('Context:', result.context)
 
 asyncio.run(main())
 ```
   </Tab>
 </Tabs>
 
-## 4. Verify Connection
+**Expected output:**
+```
+Memories: [Memory(content='I love Python and building AI applications', ...)]
+Profiles: [UserProfile(topic='interests', sub_topic='language', content='Python'), ...]
+Context: # User Memory\n## User Profile\n- interests::language: Python\n...
+```
+
+## 5. Verify Connection
 
 Check that your connection is working:
 
@@ -140,7 +119,6 @@ curl -H "X-API-Key: $DELTAMEMORY_API_KEY" $DELTAMEMORY_URL/v1/health
 ```
 
 Expected response:
-
 ```json
 {
   "healthy": true,
@@ -148,33 +126,120 @@ Expected response:
 }
 ```
 
-## Dashboard Features
+## What Just Happened?
 
-At [app.deltamemory.com](https://app.deltamemory.com), you can:
+1. **Ingest** - DeltaMemory processed your content and:
+   - Created vector embeddings for semantic search
+   - Extracted facts about your interests
+   - Built a user profile with structured data
 
-- **Manage Projects** — Create and configure multiple projects
-- **API Keys** — Generate and revoke API keys
-- **Usage Analytics** — Track recall, ingest, and store operations
-- **Memory Browser** — Explore stored memories and knowledge graphs
-- **Billing** — Manage your subscription and view usage
+2. **Recall** - DeltaMemory searched using hybrid scoring:
+   - Semantic similarity (meaning)
+   - Recency (time)
+   - Salience (importance)
 
-## Plans
-
-| Plan | Price | Projects | Storage | Recall/mo | Ingest/mo |
-|------|-------|----------|---------|-----------|-----------|
-| Free | $0 | 1 | 1GB | 10K | 1K |
-| Starter | $24/mo | 5 | 10GB | 100K | 10K |
-| Pro | $199/mo | 20 | 100GB | 1M | 100K |
-
-All paid plans include overage pricing for additional usage.
+3. **Profile** - Structured facts were automatically extracted and organized by topic
 
 ## Next Steps
+
+### Build a Chatbot
+
+<Tabs items={['TypeScript', 'Python']}>
+  <Tab>
+```typescript
+async function chat(userId: string, message: string) {
+  const db = new DeltaMemory({
+    apiKey: process.env.DELTAMEMORY_API_KEY,
+    baseUrl: process.env.DELTAMEMORY_URL,
+    defaultCollection: `user-${userId}`
+  });
+  
+  // Recall relevant context
+  const memory = await db.recall(message, { limit: 5 });
+  
+  // Use memory.context in your LLM prompt
+  const prompt = `${memory.context}\n\nUser: ${message}\nAssistant:`;
+  const response = await generateResponse(prompt);
+  
+  // Store the conversation
+  await db.ingest(`User: ${message}\nAssistant: ${response}`);
+  
+  return response;
+}
+```
+  </Tab>
+  <Tab>
+```python
+async def chat(user_id: str, message: str) -> str:
+    db = DeltaMemory(
+        api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+        base_url=os.environ.get('DELTAMEMORY_URL'),
+        default_collection=f'user-{user_id}'
+    )
+    
+    async with db:
+        # Recall relevant context
+        memory = await db.recall(message, limit=5)
+        
+        # Use memory.context in your LLM prompt
+        prompt = f"{memory.context}\n\nUser: {message}\nAssistant:"
+        response = await generate_response(prompt)
+        
+        # Store the conversation
+        await db.ingest(f"User: {message}\nAssistant: {response}")
+        
+        return response
+```
+  </Tab>
+</Tabs>
+
+### Use with Vercel AI SDK
+
+```typescript
+import { generateText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { deltaMemoryTools, DeltaMemory } from '@deltamemory/ai-sdk';
+
+const client = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL
+});
+
+const { text } = await generateText({
+  model: openai('gpt-4'),
+  messages: [{ role: 'user', content: 'What are my preferences?' }],
+  tools: {
+    ...deltaMemoryTools(client, { userId: 'user-123' })
+  }
+});
+```
+
+## Common Issues
+
+### "Invalid API key"
+- Check your API key starts with `dm_`
+- Verify it's set in environment variables
+- Try regenerating from dashboard
+
+### "Connection refused"
+- Check your endpoint URL is correct
+- Verify it starts with `https://`
+- Test with: `curl $DELTAMEMORY_URL/v1/health`
+
+### "Empty recall results"
+- Make sure you ingested content first
+- Try a broader query
+- Check you're using the same collection
+
+## Learn More
 
 import { Cards, Card } from 'nextra/components'
 
 <Cards>
-  <Card title="TypeScript SDK Reference" href="/sdk/typescript" />
-  <Card title="Python SDK Reference" href="/sdk/python" />
-  <Card title="Integration Patterns" href="/usage-patterns" />
-  <Card title="Vercel AI SDK Integration" href="/integrations/vercel-ai-sdk" />
+  <Card title="Core Concepts" href="/concepts" />
+  <Card title="TypeScript SDK" href="/sdk/typescript" />
+  <Card title="Python SDK" href="/sdk/python" />
+  <Card title="Vercel AI SDK" href="/integrations/vercel-ai-sdk" />
+  <Card title="Production Guide" href="/production" />
+  <Card title="Troubleshooting" href="/troubleshooting" />
 </Cards>

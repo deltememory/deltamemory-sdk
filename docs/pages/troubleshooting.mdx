@@ -1,0 +1,466 @@
+# Troubleshooting
+
+Common issues and solutions when working with DeltaMemory.
+
+## Authentication Issues
+
+### API Key Not Working
+
+**Symptoms:**
+- `401 Unauthorized` errors
+- `Invalid API key` messages
+
+**Solutions:**
+
+1. **Verify your API key format**
+   ```bash
+   # API keys should start with 'dm_'
+   echo $DELTAMEMORY_API_KEY
+   # Should output: dm_xxxxxxxxxxxxx
+   ```
+
+2. **Check environment variables are loaded**
+   ```typescript
+   // TypeScript
+   console.log('API Key:', process.env.DELTAMEMORY_API_KEY?.substring(0, 6));
+   // Should output: API Key: dm_xxx
+   ```
+
+   ```python
+   # Python
+   import os
+   print('API Key:', os.environ.get('DELTAMEMORY_API_KEY', '')[:6])
+   # Should output: API Key: dm_xxx
+   ```
+
+3. **Regenerate API key from dashboard**
+   - Visit [app.deltamemory.com](https://app.deltamemory.com)
+   - Go to Settings → API Keys
+   - Generate new key and update your environment
+
+### Wrong Endpoint URL
+
+**Symptoms:**
+- Connection timeouts
+- `404 Not Found` errors
+- `ECONNREFUSED` errors
+
+**Solutions:**
+
+1. **Verify your endpoint URL**
+   ```bash
+   # Should be your assigned endpoint from dashboard
+   echo $DELTAMEMORY_URL
+   # Example: https://api-us-east-1.deltamemory.com
+   ```
+
+2. **Check URL format**
+   - Must start with `https://`
+   - No trailing slash
+   - No path segments (e.g., `/api` or `/v1`)
+
+3. **Test connectivity**
+   ```bash
+   curl -H "Authorization: Bearer $DELTAMEMORY_API_KEY" \
+        $DELTAMEMORY_URL/health
+   # Should return: {"healthy":true,"version":"1.0.0"}
+   ```
+
+## Connection Issues
+
+### Timeout Errors
+
+**Symptoms:**
+- `Request timeout` errors
+- Operations taking too long
+
+**Solutions:**
+
+1. **Increase timeout**
+   ```typescript
+   // TypeScript
+   const db = new DeltaMemory({
+     apiKey: process.env.DELTAMEMORY_API_KEY,
+     baseUrl: process.env.DELTAMEMORY_URL,
+     timeout: 60000  // 60 seconds instead of default 30
+   });
+   ```
+
+   ```python
+   # Python
+   db = DeltaMemory(
+       api_key=os.environ.get('DELTAMEMORY_API_KEY'),
+       base_url=os.environ.get('DELTAMEMORY_URL'),
+       timeout=60.0  # 60 seconds instead of default 30
+   )
+   ```
+
+2. **Check network connectivity**
+   ```bash
+   # Test if you can reach the endpoint
+   ping api-us-east-1.deltamemory.com
+   ```
+
+3. **Use store() instead of ingest() for faster operations**
+   ```typescript
+   // Faster - no cognitive processing
+   await db.store(content);
+   
+   // Slower - full cognitive processing
+   await db.ingest(content);
+   ```
+
+### Network Errors
+
+**Symptoms:**
+- `ECONNRESET` errors
+- `ETIMEDOUT` errors
+- Intermittent failures
+
+**Solutions:**
+
+1. **Implement retry logic**
+   ```typescript
+   async function ingestWithRetry(content: string, maxRetries = 3) {
+     for (let i = 0; i < maxRetries; i++) {
+       try {
+         return await db.ingest(content);
+       } catch (error) {
+         if (i === maxRetries - 1) throw error;
+         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+       }
+     }
+   }
+   ```
+
+2. **Check firewall/proxy settings**
+   - Ensure outbound HTTPS (port 443) is allowed
+   - Configure proxy if needed:
+   ```typescript
+   const db = new DeltaMemory({
+     apiKey: process.env.DELTAMEMORY_API_KEY,
+     baseUrl: process.env.DELTAMEMORY_URL,
+     headers: {
+       'Proxy-Authorization': 'Basic ...'
+     }
+   });
+   ```
+
+## Empty Recall Results
+
+### No Memories Found
+
+**Symptoms:**
+- `recall()` returns empty results
+- `results` array is `[]`
+
+**Solutions:**
+
+1. **Verify memories were ingested**
+   ```typescript
+   // Check collection stats
+   const stats = await db.stats();
+   console.log('Memory count:', stats.memory_count);
+   ```
+
+2. **Check collection name**
+   ```typescript
+   // Make sure you're querying the right collection
+   await db.ingest('content', { collection: 'my-app' });
+   await db.recall('query', { collection: 'my-app' });  // Must match
+   ```
+
+3. **Adjust recall weights**
+   ```typescript
+   // Increase similarity weight, decrease recency
+   const results = await db.recall('query', {
+     weights: {
+       similarity: 0.8,  // Higher = more semantic matching
+       recency: 0.1,     // Lower = less time-dependent
+       salience: 0.1
+     }
+   });
+   ```
+
+4. **Try broader queries**
+   ```typescript
+   // Too specific
+   await db.recall('user prefers dark mode in TypeScript');
+   
+   // Better
+   await db.recall('user preferences');
+   ```
+
+### Low Quality Results
+
+**Symptoms:**
+- Results don't seem relevant
+- Low cognitive scores
+
+**Solutions:**
+
+1. **Tune recall weights for your use case**
+   ```typescript
+   // For recent conversations
+   const results = await db.recall('query', {
+     weights: { similarity: 0.3, recency: 0.5, salience: 0.2 }
+   });
+   
+   // For important facts
+   const results = await db.recall('query', {
+     weights: { similarity: 0.4, recency: 0.1, salience: 0.5 }
+   });
+   ```
+
+2. **Increase result limit**
+   ```typescript
+   const results = await db.recall('query', { limit: 20 });
+   ```
+
+3. **Filter by memory type**
+   ```typescript
+   // Only get facts and insights
+   const results = await db.recall('query', {
+     memoryTypes: ['Fact', 'Insight']
+   });
+   ```
+
+## Performance Issues
+
+### Slow Ingest Operations
+
+**Symptoms:**
+- `ingest()` takes several seconds
+- High latency
+
+**Solutions:**
+
+1. **Use store() when cognitive processing isn't needed**
+   ```typescript
+   // Fast - no LLM processing
+   await db.store(content);
+   
+   // Slow - full cognitive processing
+   await db.ingest(content);
+   ```
+
+2. **Batch operations when possible**
+   ```typescript
+   // Instead of multiple ingests
+   for (const item of items) {
+     await db.ingest(item);  // Slow
+   }
+   
+   // Combine into single ingest
+   await db.ingest(items.join('\n'));  // Faster
+   ```
+
+3. **Process in background**
+   ```typescript
+   // Don't block user response
+   async function handleMessage(message: string) {
+     // Respond immediately
+     const response = await generateResponse(message);
+     
+     // Ingest in background
+     db.ingest(message).catch(console.error);
+     
+     return response;
+   }
+   ```
+
+### High Memory Usage
+
+**Symptoms:**
+- Large collection sizes
+- Slow recall operations
+
+**Solutions:**
+
+1. **Run periodic consolidation**
+   ```typescript
+   // Merge similar memories
+   await db.consolidate(0.85);  // 85% similarity threshold
+   ```
+
+2. **Apply salience decay**
+   ```typescript
+   // Reduce importance of old memories
+   await db.decay(0.1);  // 10% decay rate
+   ```
+
+3. **Purge old collections**
+   ```typescript
+   // Delete unused collections
+   await db.purge('old-collection');
+   ```
+
+4. **Use collection per user/session**
+   ```typescript
+   // Instead of one massive collection
+   const db = new DeltaMemory({
+     defaultCollection: `user-${userId}`
+   });
+   ```
+
+## Type Errors
+
+### TypeScript Type Issues
+
+**Symptoms:**
+- Type errors in IDE
+- Compilation failures
+
+**Solutions:**
+
+1. **Update TypeScript version**
+   ```bash
+   npm install -D typescript@latest
+   ```
+
+2. **Import types explicitly**
+   ```typescript
+   import type {
+     Memory,
+     RecallResponse,
+     IngestResponse,
+     UserProfile,
+     UserEvent
+   } from 'deltamemory';
+   ```
+
+3. **Check tsconfig.json**
+   ```json
+   {
+     "compilerOptions": {
+       "moduleResolution": "node",
+       "esModuleInterop": true,
+       "skipLibCheck": true
+     }
+   }
+   ```
+
+### Python Type Hints
+
+**Symptoms:**
+- Type checker warnings
+- IDE not showing autocomplete
+
+**Solutions:**
+
+1. **Install type stubs**
+   ```bash
+   pip install types-httpx
+   ```
+
+2. **Import types**
+   ```python
+   from deltamemory import (
+       DeltaMemory,
+       RecallResponse,
+       IngestResponse,
+       UserProfile,
+       UserEvent
+   )
+   ```
+
+## Error Messages
+
+### "Memory not found"
+
+**Cause:** Trying to get/delete a memory that doesn't exist
+
+**Solution:**
+```typescript
+try {
+  const memory = await db.get(memoryId);
+} catch (error) {
+  if (error instanceof MemoryNotFoundError) {
+    console.log('Memory was already deleted or never existed');
+  }
+}
+```
+
+### "Collection not found"
+
+**Cause:** Querying a collection that hasn't been created yet
+
+**Solution:**
+```typescript
+// Collections are created automatically on first ingest
+await db.ingest('content', { collection: 'new-collection' });
+
+// Now you can query it
+await db.recall('query', { collection: 'new-collection' });
+```
+
+### "Invalid request"
+
+**Cause:** Malformed request parameters
+
+**Solution:**
+```typescript
+// Check parameter types
+await db.recall('query', {
+  limit: 10,              // Must be number
+  weights: {
+    similarity: 0.5,      // Must be 0-1
+    recency: 0.3,         // Must be 0-1
+    salience: 0.2         // Must be 0-1
+  }
+});
+```
+
+## Debugging Tips
+
+### Enable Debug Logging
+
+```typescript
+// TypeScript - log all requests
+const db = new DeltaMemory({
+  apiKey: process.env.DELTAMEMORY_API_KEY,
+  baseUrl: process.env.DELTAMEMORY_URL,
+  headers: {
+    'X-Debug': 'true'
+  }
+});
+```
+
+```python
+# Python - enable httpx logging
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
+
+### Inspect Responses
+
+```typescript
+const result = await db.recall('query');
+console.log('Results:', result.results.length);
+console.log('Profiles:', result.profiles?.length);
+console.log('Events:', result.events?.length);
+console.log('Top score:', result.results[0]?.cognitive_score);
+```
+
+### Test with Health Check
+
+```typescript
+// Verify connection before operations
+const health = await db.health();
+if (!health.healthy) {
+  throw new Error('DeltaMemory service is unhealthy');
+}
+```
+
+## Still Having Issues?
+
+If you're still experiencing problems:
+
+1. **Check service status**: [status.deltamemory.com](https://status.deltamemory.com)
+2. **Review documentation**: [docs.deltamemory.com](https://docs.deltamemory.com)
+3. **Contact support**: support@deltamemory.com
+4. **Include in your report**:
+   - SDK version (TypeScript/Python)
+   - Error message and stack trace
+   - Minimal code to reproduce
+   - Expected vs actual behavior

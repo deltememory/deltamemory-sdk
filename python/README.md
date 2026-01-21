@@ -74,7 +74,7 @@ Get your API key and endpoint from [app.deltamemory.com](https://app.deltamemory
 
 ```bash
 export DELTAMEMORY_API_KEY=dm_your_api_key_here
-export DELTAMEMORY_URL=https://your-endpoint.deltamemory.com
+export DELTAMEMORY_URL=https://api-us-east-1.deltamemory.com
 ```
 
 Then use in your client:

@@ -1,0 +1,283 @@
+# SDK Feature Comparison
+
+Feature availability across DeltaMemory SDKs and integrations.
+
+## Core SDKs
+
+| Feature | TypeScript | Python | Status |
+|---------|-----------|--------|--------|
+| **Core Operations** |
+| `ingest()` | ✅ | ✅ | Stable |
+| `recall()` | ✅ | ✅ | Stable |
+| `store()` | ✅ | ✅ | Stable |
+| `get()` | ✅ | ✅ | Stable |
+| `delete()` | ✅ | ✅ | Stable |
+| **Cognitive Features** |
+| User Profiles | ✅ | ✅ | Stable |
+| Event Timeline | ✅ | ✅ | Stable |
+| Pre-formatted Context | ✅ | ✅ | Stable |
+| Fact Extraction | ✅ | ✅ | Stable |
+| Concept Extraction | ✅ | ✅ | Stable |
+| **Memory Management** |
+| `decay()` | ✅ | ✅ | Stable |
+| `consolidate()` | ✅ | ✅ | Stable |
+| `reflect()` | ✅ | ✅ | Stable |
+| `purge()` | ✅ | ✅ | Stable |
+| **Knowledge Graph** |
+| `graph()` | ✅ | ✅ | Stable |
+| Multi-hop Reasoning | ✅ | ✅ | Stable |
+| **Collections** |
+| Multiple Collections | ✅ | ✅ | Stable |
+| Collection Stats | ✅ | ✅ | Stable |
+| **Advanced** |
+| Custom Weights | ✅ | ✅ | Stable |
+| Memory Type Filtering | ✅ | ✅ | Stable |
+| Metadata Support | ✅ | ✅ | Stable |
+| Batch Operations | ⚠️ | ⚠️ | Planned |
+| Streaming | ❌ | ❌ | Planned |
+| **Developer Experience** |
+| TypeScript Types | ✅ | N/A | Stable |
+| Python Type Hints | N/A | ✅ | Stable |
+| Error Classes | ✅ | ✅ | Stable |
+| Async/Await | ✅ | ✅ | Stable |
+| Context Manager | N/A | ✅ | Stable |
+
+## Integration SDKs
+
+| Feature | AI SDK | MCP | Status |
+|---------|--------|-----|--------|
+| **Core Operations** |
+| Recall Memory | ✅ | ✅ | Stable |
+| Store Memory | ✅ | ✅ | Stable |
+| Get Profile | ❌ | ✅ | Stable |
+| Get Events | ❌ | ✅ | Stable |
+| **Framework Support** |
+| Vercel AI SDK | ✅ | N/A | Stable |
+| Claude Desktop | N/A | ✅ | Stable |
+| Cline | N/A | ✅ | Stable |
+| Other MCP Clients | N/A | ✅ | Stable |
+| **Features** |
+| Tool Descriptions | ✅ | ✅ | Stable |
+| Zod Schemas | ✅ | N/A | Stable |
+| Streaming Support | ✅ | ❌ | Stable |
+| Multi-user Isolation | ✅ | ✅ | Stable |
+| Custom Metadata | ✅ | ✅ | Stable |
+
+## Language Support
+
+| Language | Package | Version | Status |
+|----------|---------|---------|--------|
+| TypeScript/JavaScript | `deltamemory` | 1.0.0+ | ✅ Stable |
+| Python | `deltamemory` | 1.0.0+ | ✅ Stable |
+| Go | - | - | 🔮 Planned |
+| Rust | - | - | 🔮 Planned |
+| Java | - | - | 🔮 Planned |
+
+## Framework Integrations
+
+| Framework | Package | Status |
+|-----------|---------|--------|
+| Vercel AI SDK | `@deltamemory/ai-sdk` | ✅ Stable |
+| LangChain (Python) | `deltamemory-langchain` | ⚠️ Beta |
+| LangChain (JS) | - | 🔮 Planned |
+| LlamaIndex | - | 🔮 Planned |
+| Haystack | - | 🔮 Planned |
+| Semantic Kernel | - | 🔮 Planned |
+
+## Platform Support
+
+| Platform | TypeScript | Python | Notes |
+|----------|-----------|--------|-------|
+| Node.js 18+ | ✅ | N/A | Recommended |
+| Node.js 16+ | ✅ | N/A | Supported |
+| Bun | ✅ | N/A | Supported |
+| Deno | ⚠️ | N/A | Untested |
+| Python 3.8+ | N/A | ✅ | Recommended |
+| Python 3.7 | N/A | ❌ | Unsupported |
+| Browser | ⚠️ | N/A | API key exposure risk |
+
+## Deployment Platforms
+
+| Platform | Support | Notes |
+|----------|---------|-------|
+| Vercel | ✅ | Serverless functions |
+| AWS Lambda | ✅ | Connection reuse recommended |
+| Google Cloud Functions | ✅ | Connection reuse recommended |
+| Azure Functions | ✅ | Connection reuse recommended |
+| Docker | ✅ | Full support |
+| Kubernetes | ✅ | Full support |
+| Cloudflare Workers | ⚠️ | Limited runtime |
+
+## Legend
+
+- ✅ **Stable** - Production ready, fully supported
+- ⚠️ **Beta** - Available but may have breaking changes
+- 🔮 **Planned** - On roadmap, not yet available
+- ❌ **Not Available** - Not currently supported
+- N/A - Not applicable for this SDK
+
+## Version Requirements
+
+### TypeScript SDK
+
+```json
+{
+  "node": ">=16.0.0",
+  "typescript": ">=4.5.0"
+}
+```
+
+### Python SDK
+
+```toml
+[tool.poetry.dependencies]
+python = "^3.8"
+httpx = "^0.24.0"
+```
+
+### AI SDK Integration
+
+```json
+{
+  "node": ">=18.0.0",
+  "ai": ">=3.0.0",
+  "deltamemory": ">=1.0.0"
+}
+```
+
+## Migration Path
+
+### From CognitiveDB to DeltaMemory
+
+Both TypeScript and Python SDKs support legacy `CognitiveDB` alias:
+
+```typescript
+// Still works
+import { CognitiveDB } from 'deltamemory';
+const db = new CognitiveDB({ ... });
+```
+
+```python
+# Still works
+from deltamemory import CognitiveDB
+db = CognitiveDB(...)
+```
+
+**Recommendation:** Migrate to `DeltaMemory` class name for future compatibility.
+
+## Feature Requests
+
+Missing a feature? Let us know:
+
+- Email: support@deltamemory.com
+- Include: Use case, priority, SDK preference
+
+## Roadmap
+
+### Q1 2024
+- ✅ User profiles and events
+- ✅ Pre-formatted context
+- ✅ MCP server integration
+
+### Q2 2024
+- ⚠️ LangChain Python integration
+- 🔮 Batch operations API
+- 🔮 Streaming responses
+
+### Q3 2024
+- 🔮 LangChain JS integration
+- 🔮 LlamaIndex integration
+- 🔮 Go SDK
+
+### Q4 2024
+- 🔮 Rust SDK
+- 🔮 Java SDK
+- 🔮 Advanced graph queries
+
+*Roadmap subject to change based on user feedback and priorities.*
+
+## SDK Comparison Details
+
+### TypeScript SDK
+
+**Strengths:**
+- Full TypeScript type safety
+- Native async/await
+- Works with all Node.js frameworks
+- Bun support
+
+**Best for:**
+- Next.js applications
+- Express/Fastify APIs
+- Serverless functions
+- Real-time applications
+
+### Python SDK
+
+**Strengths:**
+- Pythonic async/await
+- Context manager support
+- Type hints with mypy
+- httpx-based (modern, fast)
+
+**Best for:**
+- FastAPI applications
+- Django applications
+- Data science workflows
+- ML/AI pipelines
+
+### AI SDK Integration
+
+**Strengths:**
+- Native Vercel AI SDK tools
+- Streaming support
+- Zod schema validation
+- Agent-friendly
+
+**Best for:**
+- Vercel AI SDK projects
+- Chatbot applications
+- Agent-based systems
+- Streaming UIs
+
+### MCP Server
+
+**Strengths:**
+- Works with any MCP client
+- Claude Desktop integration
+- Cline integration
+- No code changes needed
+
+**Best for:**
+- Claude Desktop users
+- IDE integrations
+- Development tools
+- Quick prototyping
+
+## Performance Characteristics
+
+| Operation | TypeScript | Python | Notes |
+|-----------|-----------|--------|-------|
+| `ingest()` | ~500-1500ms | ~500-1500ms | LLM processing time |
+| `store()` | ~50-200ms | ~50-200ms | Embedding only |
+| `recall()` | ~100-500ms | ~100-500ms | Depends on collection size |
+| `get()` | ~20-50ms | ~20-50ms | Direct lookup |
+| `graph()` | ~100-300ms | ~100-300ms | Depends on graph size |
+
+*Performance varies based on content size, collection size, and network latency.*
+
+## Support Matrix
+
+| SDK | Documentation | Examples | Tests | CI/CD |
+|-----|--------------|----------|-------|-------|
+| TypeScript | ✅ | ✅ | ✅ | ✅ |
+| Python | ✅ | ✅ | ✅ | ✅ |
+| AI SDK | ✅ | ✅ | ⚠️ | ✅ |
+| MCP | ✅ | ✅ | ❌ | ⚠️ |
+
+## Questions?
+
+- [TypeScript SDK Docs](/sdk/typescript)
+- [Python SDK Docs](/sdk/python)
+- [AI SDK Docs](/integrations/vercel-ai-sdk)
+- [MCP Docs](/integrations/mcp)

@@ -1,0 +1,16 @@
+{
+  "name": "deltamemory-hello-world",
+  "version": "1.0.0",
+  "description": "Simplest DeltaMemory example",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx hello.ts"
+  },
+  "dependencies": {
+    "deltamemory": "^1.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}

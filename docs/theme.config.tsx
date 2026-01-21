@@ -1,7 +1,33 @@
 import { DocsThemeConfig } from 'nextra-theme-docs'
+import { useTheme } from 'next-themes'
+import Image from 'next/image'
+
+const Logo = () => {
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
+  
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <Image 
+        src={isDark ? "/logo-white.webp" : "/logo-black.webp"}
+        alt="DeltaMemory" 
+        width={120} 
+        height={30}
+      />
+      <span style={{ 
+        fontSize: '12px', 
+        fontWeight: 500, 
+        opacity: 0.6,
+        marginLeft: '4px'
+      }}>
+        (Alpha)
+      </span>
+    </div>
+  )
+}
 
 const config: DocsThemeConfig = {
-  logo: <span style={{ fontWeight: 700 }}>DeltaMemory</span>,
+  logo: <Logo />,
   project: {
     link: 'https://github.com/deltamemory/deltamemory-sdk',
   },
@@ -23,7 +49,7 @@ const config: DocsThemeConfig = {
   },
   primaryHue: 200,
   sidebar: {
-    defaultMenuCollapseLevel: 1,
+    defaultMenuCollapseLevel: 2,
     toggleButton: true,
   },
   toc: {
