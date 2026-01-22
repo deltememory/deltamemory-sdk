@@ -49,7 +49,7 @@ const config: DocsThemeConfig = {
   },
   primaryHue: 200,
   sidebar: {
-    defaultMenuCollapseLevel: 2,
+    defaultMenuCollapseLevel: 1,
     toggleButton: true,
   },
   toc: {
