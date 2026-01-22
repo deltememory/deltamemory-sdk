@@ -2,15 +2,9 @@
   "index": "Introduction",
   "quickstart": "Quick Start",
   "concepts": "Core Concepts",
-  "separator-1": {
-    "type": "separator"
-  },
   "sdk": "SDKs",
   "integrations": "Integrations",
   "usage-patterns": "Usage Patterns",
-  "separator-2": {
-    "type": "separator"
-  },
   "production": "Production Guide",
   "troubleshooting": "Troubleshooting",
   "sdk-comparison": "SDK Comparison"
